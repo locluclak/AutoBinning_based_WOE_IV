@@ -1,0 +1,54 @@
+{
+    "config": {
+        "input_file": "export_ftr_loan_1.csv",
+        "output_file": "woe_all_features2.html",
+        "label_name": "LABEL_IS_CASA_50M_ACTUAL_BAL_LCL",
+        "min_bin": 4,
+        "max_bin": 10,
+        "specialvalue": 0,
+        "min_diff_woe": 0.01,
+        "ignore_column": [
+            "LABEL_IS_CASA_50M_AVG_AMT_LCL",
+            "LABEL_IS_SAVING_NEW_OPEN",
+            "LABEL_IS_SAVING_100M_NEW_OPEN"
+        ]
+    },
+    "features": {
+        "LOAN_AMT": {
+            "option": "2. Monotonic",
+            "splits": [
+                606520896,
+                2171604736,
+                3029500032,
+                7000046848,
+                10321574400,
+                15002135552,
+                27080972288
+            ]
+        },
+        "LOAN_AMT_ACTIVE": {
+            "option": "2. Monotonic",
+            "splits": [
+                499246304,
+                2014867584,
+                5096750080,
+                10004852736,
+                15505036800
+            ]
+        },
+        "DAY_PAST_LAST_LOAN": {
+            "option": "1. Free optimization",
+            "splits": [
+                10.5,
+                25.5,
+                60,
+                102.5,
+                326.5,
+                935.5,
+                1349.5,
+                2186.5,
+                3565
+            ]
+        }
+    }
+}
