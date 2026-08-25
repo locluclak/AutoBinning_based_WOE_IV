@@ -37,17 +37,13 @@
             ]
         },
         "DAY_PAST_LAST_LOAN": {
-            "option": "1. Free optimization",
+            "option": "2. Monotonic",
             "splits": [
                 10.5,
                 25.5,
-                60,
-                102.5,
-                326.5,
-                935.5,
-                1349.5,
-                2186.5,
-                3565
+                40.5,
+                191.5,
+                326.5
             ]
         }
     }

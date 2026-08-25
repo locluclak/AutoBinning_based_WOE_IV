@@ -1,0 +1,18 @@
+import yaml
+
+
+def load_config(config_path: str = "config.yaml") -> dict:
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+CONFIG = load_config()
+
+INPUT_FILE = CONFIG["input_file"]
+OUTPUT_FILE = CONFIG["output_file"]
+label_name = CONFIG["label_name"]
+MIN_BIN = CONFIG["min_bin"]
+MAX_BIN = CONFIG["max_bin"]
+SPECIALVALUE = CONFIG["specialvalue"]
+MIN_DIFF_WOE = CONFIG["min_diff_woe"]
+IGNORE_COLUMN = CONFIG.get("ignore_column", [])
