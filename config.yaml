@@ -1,0 +1,8 @@
+input_file: "export_ftr_loan_1.csv"
+output_file: "woe_all_features2.html"
+label_name: "LABEL_IS_CASA_50M_ACTUAL_BAL_LCL"
+min_bin: 4
+max_bin: 10
+specialvalue: 0
+min_diff_woe: 0.01
+ignore_column: [LABEL_IS_CASA_50M_AVG_AMT_LCL,LABEL_IS_SAVING_NEW_OPEN,LABEL_IS_SAVING_100M_NEW_OPEN]

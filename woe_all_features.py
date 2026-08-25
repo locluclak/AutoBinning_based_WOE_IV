@@ -8,16 +8,24 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import yaml
 from optbinning import OptimalBinning
 
-INPUT_FILE = "export_ftr_loan_1.csv"
-OUTPUT_FILE = "woe_all_features2.html"
-label_name = "LABEL_IS_CASA_50M_ACTUAL_BAL_LCL"
-MIN_BIN = 4
-MAX_BIN = 10
-SPECIALVALUE = 0
-MIN_DIFF_WOE = 0.01
+def load_config(config_path: str = "config.yaml") -> dict:
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
+CONFIG = load_config()
+
+INPUT_FILE = CONFIG["input_file"]
+OUTPUT_FILE = CONFIG["output_file"]
+label_name = CONFIG["label_name"]
+MIN_BIN = CONFIG["min_bin"]
+MAX_BIN = CONFIG["max_bin"]
+SPECIALVALUE = CONFIG["specialvalue"]
+MIN_DIFF_WOE = CONFIG["min_diff_woe"]
+IGNORE_COLUMN = CONFIG.get("ignore_column", [])
+# print(IGNORE_COLUMN)
 def create_woe_df(x, y, splits):
     """
     Create WOE / IV table from manually specified or optimal splits.
@@ -196,7 +204,7 @@ def figure_to_base64(fig):
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
-def calculate_feature(feature, X_train, y):
+def calculate_feature(feature, X_train, y, considerMISSING=False):
     x_original = X_train[feature].copy()
 
     zero_pct = (x_original == SPECIALVALUE).mean()
@@ -215,9 +223,13 @@ def calculate_feature(feature, X_train, y):
     if n_new == 0:
         raise ValueError("Feature has no usable observations.")
 
-    min_bin_size = 0.05 #* n_old / n_new
-    max_bin_size = min(0.50 * n_old / n_new, 1)
-
+    if considerMISSING:
+        min_bin_size = 0.05 * n_old / n_new
+        max_bin_size = min(0.50 * n_old / n_new, 1)
+    else:
+        min_bin_size = 0.05
+        max_bin_size = 0.50
+        
     p_bar = np.mean(y_clean)
     min_event_rate_diff = 2 * p_bar * (1 - p_bar) * np.tanh(MIN_DIFF_WOE / 2)
 
@@ -277,7 +289,8 @@ def build_feature_html(feature, X_train, y):
     """
 
 
-def build_report(df, label_name = "LABEL"):
+def build_report(df:pd.DataFrame, label_name = "LABEL"):
+    df = df.drop(columns=[c for c in IGNORE_COLUMN if c in df.columns])
     X_train = df.drop(columns=[label_name])
     y = pd.Series(df[label_name].values, index=X_train.index)
     features = [column for column in X_train.columns if column != label_name and not str(column).startswith(label_name)]
@@ -319,8 +332,9 @@ body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
 h1 {{ margin-bottom: 8px; }}
 h2 {{ margin-top: 0; }}
 h3 {{ margin-top: 24px; }}
-.feature {{ margin-bottom: 56px; padding-bottom: 40px; border-bottom: 1px solid #ddd; }}
 .plot {{ display: block; max-width: 100%; height: auto; }}
+table, th, td {{ border: 1px solid #ccc; border-collapse: collapse; }}
+th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table {{ border-collapse: collapse; margin: 12px 0 20px; width: 100%; }}
 .status-table th, .status-table td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table th {{ background: #f3f3f3; }}
