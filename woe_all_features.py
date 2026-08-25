@@ -275,10 +275,10 @@ def build_feature_html(feature, X_train, y):
     """
 
 
-def build_report(df):
-    X_train = df.drop(columns=["LABEL"])
-    y = pd.Series(df["LABEL"].values, index=X_train.index)
-    features = [column for column in X_train.columns if column != "LABEL" and not str(column).startswith("LABEL")]
+def build_report(df, label_name = "LABEL"):
+    X_train = df.drop(columns=[label_name])
+    y = pd.Series(df[label_name].values, index=X_train.index)
+    features = [column for column in X_train.columns if column != label_name and not str(column).startswith(label_name)]
 
     sections = []
     skipped = []
@@ -337,7 +337,7 @@ h3 {{ margin-top: 24px; }}
 
 def main():
     df = pd.read_csv(INPUT_FILE)
-    html = build_report(df)
+    html = build_report(df, "LABEL")
     Path(OUTPUT_FILE).write_text(html, encoding="utf-8")
     print(f"HTML report: {OUTPUT_FILE}")
 
