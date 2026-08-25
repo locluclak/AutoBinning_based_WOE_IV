@@ -10,8 +10,9 @@ import numpy as np
 import pandas as pd
 from optbinning import OptimalBinning
 
-INPUT_FILE = "train_sdf_selected1.csv"
-OUTPUT_FILE = "woe_all_features.html"
+INPUT_FILE = "export_ftr_loan_1.csv"
+OUTPUT_FILE = "woe_all_features2.html"
+label_name = "LABEL_IS_CASA_50M_ACTUAL_BAL_LCL"
 MIN_BIN = 4
 MAX_BIN = 10
 SPECIALVALUE = 0
@@ -183,7 +184,8 @@ def display_woe_tables(results: dict, x, y_clean, create_woe_df_func, formats: d
     """
 
     if render:
-        display(HTML(flex_container))
+        pass
+        # display(HTML(flex_container))
 
     return woe_tables, flex_container
 
@@ -213,7 +215,7 @@ def calculate_feature(feature, X_train, y):
     if n_new == 0:
         raise ValueError("Feature has no usable observations.")
 
-    min_bin_size = 0.05 * n_old / n_new
+    min_bin_size = 0.05 #* n_old / n_new
     max_bin_size = min(0.50 * n_old / n_new, 1)
 
     p_bar = np.mean(y_clean)
@@ -337,7 +339,7 @@ h3 {{ margin-top: 24px; }}
 
 def main():
     df = pd.read_csv(INPUT_FILE)
-    html = build_report(df, "LABEL")
+    html = build_report(df, label_name)
     Path(OUTPUT_FILE).write_text(html, encoding="utf-8")
     print(f"HTML report: {OUTPUT_FILE}")
 
