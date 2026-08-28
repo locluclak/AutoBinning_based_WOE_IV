@@ -12,19 +12,23 @@ def woe_table_html(woe_df):
         "prob_n_obs": "{:.2%}",
         "pct_event": "{:.2%}",
         "pct_non_event": "{:.2%}",
-        "WOE": "{:.2f}",
-        "IV_detail": "{:.2f}",
-        "IV_total": "{:.2f}",
+        "WOE": "{:.4f}",
+        "IV_detail": "{:.4f}",
+        "IV_total": "{:.4f}",
     }
     valid_formats = {k: v for k, v in formats.items() if k in woe_df.columns}
     return woe_df.style.format(valid_formats).to_html()
 
 
-def plot_feature(feature, x, y_clean, splits):
+def plot_feature(feature, x, y_clean, splits, specialvalue=None, missing_first=False):
     fig, ax = plt.subplots(figsize=(7, 6))
-    woe_df = create_woe_df(x, y_clean, splits)
-    woe_plot = woe_df[woe_df['Bin'] != 'Missing'].copy()
-    bin_stats = get_bin_stats(x=x, y=y_clean, splits=splits)
+    woe_df = create_woe_df(x, y_clean, splits, missing_first=missing_first, specialvalue=specialvalue)
+    bin_stats = get_bin_stats(x=x, y=y_clean, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
+    if missing_first:
+        woe_plot = woe_df.copy()
+    else:
+        woe_plot = woe_df[woe_df['Bin'] != 'Missing'].copy()
+        bin_stats = bin_stats[bin_stats['bin'] != 'Missing'].copy()
 
     n_bins = len(bin_stats)
     x_pos = np.arange(n_bins)
@@ -51,9 +55,9 @@ def plot_feature(feature, x, y_clean, splits):
     return figure_to_base64(fig)
 
 
-def build_feature_html(feature, x, y_clean, splits, option):
-    plot_html = plot_feature(feature, x, y_clean, splits)
-    woe_df = create_woe_df(x, y_clean, splits)
+def build_feature_html(feature, x, y_clean, splits, option, specialvalue=None, consider_missing=False):
+    plot_html = plot_feature(feature, x, y_clean, splits, specialvalue=specialvalue, missing_first=consider_missing)
+    woe_df = create_woe_df(x, y_clean, splits, missing_first=consider_missing, specialvalue=specialvalue)
     tables_html = woe_table_html(woe_df)
     iv_total = woe_df['IV_total'].iloc[0]
 
@@ -69,7 +73,7 @@ def build_feature_html(feature, x, y_clean, splits, option):
     """
 
 
-def build_report(df, features_config, label_name):
+def build_report(df, features_config, label_name, specialvalue=None, min_bin_size=0.05):
     X_train = df.drop(columns=[label_name])
     y = pd.Series(df[label_name].values, index=X_train.index)
 
@@ -85,8 +89,23 @@ def build_report(df, features_config, label_name):
         try:
             splits = list(map(float, cfg['splits']))
             option = cfg.get('option', '')
-            x = X_train[feature]
-            sections.append(build_feature_html(feature, x, y, splits, option))
+            part = cfg.get('part', 'removeMISSING')
+            consider_missing = part == "considerMISSING"
+            x_full = X_train[feature]
+            if consider_missing:
+                x = x_full
+                y_clean = y
+            else:
+                mask = x_full.notna()
+                x = x_full[mask]
+                y_clean = y[mask]
+            feature_special = None
+            if specialvalue is not None:
+                zero_pct = (x_full == specialvalue).mean()
+                if zero_pct >= min_bin_size:
+                    feature_special = specialvalue
+            sections.append(build_feature_html(feature, x, y_clean, splits, option,
+                                               specialvalue=feature_special, consider_missing=consider_missing))
             print(f"OK: {feature}")
         except Exception as exc:
             skipped.append((feature, exc))

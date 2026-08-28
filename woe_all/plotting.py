@@ -26,9 +26,10 @@ def plot_options(results, feature):
         y = result['y']
         splits = result['splits']
         missing_first = result.get('missing_first', False)
-        woe_df = create_woe_df(x, y, splits, missing_first=missing_first)
+        specialvalue = result.get('specialvalue')
+        woe_df = create_woe_df(x, y, splits, missing_first=missing_first, specialvalue=specialvalue)
 
-        bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first)
+        bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
 
         n_bins = len(bin_stats)
         x_pos = np.arange(n_bins)

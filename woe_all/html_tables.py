@@ -18,7 +18,8 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
     for idx, (option_name, result) in enumerate(results.items()):
         splits = result["splits"]
         missing_first = result.get("missing_first", False)
-        woe_df = create_woe_df_func(result["x"], result["y"], splits, missing_first=missing_first)
+        specialvalue = result.get("specialvalue")
+        woe_df = create_woe_df_func(result["x"], result["y"], splits, missing_first=missing_first, specialvalue=specialvalue)
         woe_tables[option_name] = woe_df
 
         valid_formats = {k: v for k, v in formats.items() if k in woe_df.columns}

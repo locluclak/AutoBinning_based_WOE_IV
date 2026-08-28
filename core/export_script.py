@@ -4,9 +4,11 @@ EXPORT_SCRIPT = """function exportConfig() {
     radios.forEach(radio => {
         const featureName = radio.name;
         const selectedOption = radio.getAttribute('data-option');
+        const part = radio.getAttribute('data-part');
         const splitsData = JSON.parse(radio.getAttribute('data-splits'));
         selectedConfig[featureName] = {
             option: selectedOption,
+            part: part,
             splits: splitsData
         };
     });

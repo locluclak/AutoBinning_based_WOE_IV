@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-def create_woe_df(x, y, splits, missing_first=False):
+def create_woe_df(x, y, splits, missing_first=False, specialvalue=None):
     """
     Create WOE / IV table from manually specified or optimal splits.
 
@@ -28,10 +28,18 @@ def create_woe_df(x, y, splits, missing_first=False):
     """
 
     data = pd.DataFrame({'x': x, 'target': y})
-    bin_edges = [-np.inf] + list(splits) + [np.inf]
-    data['bin'] = pd.cut(data['x'], bins=bin_edges, right=True, include_lowest=True)
 
-    grouped = (data.groupby('bin', observed=False)['target']
+    if specialvalue is not None:
+        special_mask = (data['x'] == specialvalue)
+        data_cut = data[~special_mask].copy()
+    else:
+        special_mask = pd.Series(False, index=data.index)
+        data_cut = data
+
+    bin_edges = [-np.inf] + list(splits) + [np.inf]
+    data_cut['bin'] = pd.cut(data_cut['x'], bins=bin_edges, right=True, include_lowest=True)
+
+    grouped = (data_cut.groupby('bin', observed=False)['target']
         .agg(n_events=lambda s: (s == 1).sum(), n_non_events=lambda s: (s == 0).sum())
         .reset_index())
 
@@ -47,6 +55,17 @@ def create_woe_df(x, y, splits, missing_first=False):
             grouped = pd.concat([missing_row, grouped], ignore_index=True)
         else:
             grouped = pd.concat([grouped, missing_row], ignore_index=True)
+
+    if special_mask.any():
+        special_row = pd.DataFrame({
+            'bin': [f'Special {specialvalue}'],
+            'n_events': [(special_mask & (data['target'] == 1)).sum()],
+            'n_non_events': [(special_mask & (data['target'] == 0)).sum()]
+        })
+        if missing_first and missing_mask.any():
+            grouped = pd.concat([grouped.iloc[:1], special_row, grouped.iloc[1:]], ignore_index=True)
+        else:
+            grouped = pd.concat([special_row, grouped], ignore_index=True)
 
     total_obs = len(data)
     total_events = (data['target'] == 1).sum()
@@ -68,7 +87,7 @@ def create_woe_df(x, y, splits, missing_first=False):
     return grouped[['Bin', 'prob_n_obs', 'pct_event', 'pct_non_event', 'WOE', 'IV_detail', 'IV_total']].copy()
 
 
-def get_bin_stats(x, y, splits, missing_first=False):
+def get_bin_stats(x, y, splits, missing_first=False, specialvalue=None):
     """
     Return observation count and proportion for each bin.
     Missing values are excluded because x used for optimization
@@ -76,13 +95,22 @@ def get_bin_stats(x, y, splits, missing_first=False):
     """
     bin_edges = [-np.inf] + list(splits) + [np.inf]
 
-    bins = pd.cut(x, bins=bin_edges, right=True, include_lowest=True)
-
-    stats = (pd.DataFrame({'bin': bins, 'target': y})
-        .groupby('bin', observed=False)
-        .size()
-        .reset_index(name='n_obs')
-    )
+    if specialvalue is not None:
+        special_mask = (x == specialvalue)
+        bins = pd.cut(x[~special_mask], bins=bin_edges, right=True, include_lowest=True)
+        stats = (pd.DataFrame({'bin': bins, 'target': y[~special_mask]})
+            .groupby('bin', observed=False)
+            .size()
+            .reset_index(name='n_obs')
+        )
+    else:
+        special_mask = pd.Series(False, index=x.index)
+        bins = pd.cut(x, bins=bin_edges, right=True, include_lowest=True)
+        stats = (pd.DataFrame({'bin': bins, 'target': y})
+            .groupby('bin', observed=False)
+            .size()
+            .reset_index(name='n_obs')
+        )
     stats['prob_n_obs'] = stats['n_obs'] / len(x)
 
     missing_mask = x.isna()
@@ -94,6 +122,18 @@ def get_bin_stats(x, y, splits, missing_first=False):
             'prob_n_obs': [n_missing / len(x)]
         })
         stats = pd.concat([missing_row, stats], ignore_index=True)
+
+    if special_mask.any():
+        n_special = int(special_mask.sum())
+        special_row = pd.DataFrame({
+            'bin': [f'Special {specialvalue}'],
+            'n_obs': [n_special],
+            'prob_n_obs': [n_special / len(x)]
+        })
+        if missing_first and missing_mask.any():
+            stats = pd.concat([stats.iloc[:1], special_row, stats.iloc[1:]], ignore_index=True)
+        else:
+            stats = pd.concat([special_row, stats], ignore_index=True)
 
     return stats
 

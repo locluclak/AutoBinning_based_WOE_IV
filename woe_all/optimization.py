@@ -16,10 +16,11 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
 
     zero_pct = (x_original == SPECIALVALUE).mean()
 
-    if zero_pct < MIN_BIN_SIZE:
-        mask_nonmissing = x_original.notna()
-    else:
+    special_allowed = zero_pct >= MIN_BIN_SIZE
+    if special_allowed:
         mask_nonmissing = x_original.notna() & (x_original != SPECIALVALUE)
+    else:
+        mask_nonmissing = x_original.notna()
 
     x = x_original.loc[mask_nonmissing]
     y_clean = y.loc[mask_nonmissing]
@@ -49,7 +50,14 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
         optb.fit(x, y_clean)
 
         missing_first = considerMISSING and optb.status == "OPTIMAL"
-        if missing_first:
+        if special_allowed:
+            if considerMISSING:
+                display_x = x_original
+                display_y = y
+            else:
+                display_x = x_original[x_original.notna()]
+                display_y = y.loc[display_x.index]
+        elif missing_first:
             display_x = x_original
             display_y = y
         else:
@@ -65,6 +73,7 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
             "x": display_x,
             "y": display_y,
             "missing_first": missing_first,
+            "specialvalue": SPECIALVALUE if special_allowed else None,
         }
 
     return results

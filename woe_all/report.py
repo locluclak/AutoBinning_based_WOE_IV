@@ -39,6 +39,7 @@ def build_feature_html(feature, X_train, y):
                 f"<label class=\"option-choice\">"
                 f"<input type=\"radio\" name=\"{escape(str(feature))}\" value=\"{idx}\" "
                 f"data-option=\"{escape(option_name)}\" "
+                f"data-part=\"{escape(result['part'])}\" "
                 f"data-splits=\"{escape(json.dumps(splits))}\" "
                 f"data-status=\"{escape(str(status))}\">{escape(option_name)}</label>"
                 f"<div class=\"option-status {escape(str(status).lower())}\">Status: {escape(str(status))}</div>"
