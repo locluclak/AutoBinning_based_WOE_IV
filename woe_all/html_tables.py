@@ -1,4 +1,4 @@
-def display_woe_tables(results: dict, x, y_clean, create_woe_df_func, formats: dict = None, render: bool = True):
+def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, render: bool = True):
     """Generates and displays side-by-side formatted HTML WOE tables from results.
     """
     if formats is None:
@@ -17,7 +17,7 @@ def display_woe_tables(results: dict, x, y_clean, create_woe_df_func, formats: d
 
     for idx, (option_name, result) in enumerate(results.items()):
         splits = result["splits"]
-        woe_df = create_woe_df_func(x, y_clean, splits)
+        woe_df = create_woe_df_func(result["x"], result["y"], splits)
         woe_tables[option_name] = woe_df
 
         valid_formats = {k: v for k, v in formats.items() if k in woe_df.columns}

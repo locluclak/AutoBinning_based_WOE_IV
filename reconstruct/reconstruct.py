@@ -116,6 +116,7 @@ def build_report(df, features_config, label_name):
 <style>
 body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
 h2 {{ margin-top: 0; }}
+h1.title {{ text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px; }}
 h3 {{ margin-top: 24px; }}
 .plot {{ display: block; max-width: 40%; height: auto; }}
 .iv {{ color: #007bff; font-weight: normal; font-size: 0.8em; }}
@@ -129,7 +130,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 </style>
 </head>
 <body>
-<h1>WOE Report - Reconstructed</h1>
+<h1 class="title">{escape(str(label_name))}</h1>
 <p>Reconstructed from exported splits. No OptimalBinning used.</p>
 {''.join(sections)}
 {skipped_html}

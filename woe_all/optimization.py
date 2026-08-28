@@ -4,6 +4,13 @@ from optbinning import OptimalBinning
 from core.config_loader import MAX_BIN, MIN_BIN, MIN_DIFF_WOE, SPECIALVALUE
 
 
+OPTIONS = {
+    "1. Free optimization": "auto",
+    "2. Monotonic": "auto_asc_desc",
+    "3. U-shape / heuristic": "auto_heuristic",
+}
+
+
 def calculate_feature(feature, X_train, y, considerMISSING=False):
     x_original = X_train[feature].copy()
 
@@ -33,21 +40,21 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
     p_bar = np.mean(y_clean)
     min_event_rate_diff = 2 * p_bar * (1 - p_bar) * np.tanh(MIN_DIFF_WOE / 2)
 
-    options = {
-        "1. Free optimization": "auto",
-        "2. Monotonic": "auto_asc_desc",
-        "3. U-shape / heuristic": "auto_heuristic"
-    }
+    part = "considerMISSING" if considerMISSING else "removeMISSING"
 
     results = {}
 
-    for option_name, trend in options.items():
+    for option_name, trend in OPTIONS.items():
         optb = OptimalBinning(name=feature, dtype="numerical", min_n_bins=MIN_BIN, max_n_bins=MAX_BIN, min_bin_size=min_bin_size, max_bin_size=max_bin_size, min_event_rate_diff=min_event_rate_diff, monotonic_trend=trend)
         optb.fit(x, y_clean)
-        results[option_name] = {
+        results[f"{part} | {option_name}"] = {
+            "part": part,
+            "option": option_name,
             "model": optb,
             "splits": optb.splits,
-            "binning_table": optb.binning_table
+            "binning_table": optb.binning_table,
+            "x": x,
+            "y": y_clean,
         }
 
-    return results, x, y_clean
+    return results

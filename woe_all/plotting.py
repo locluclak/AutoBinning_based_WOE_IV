@@ -4,9 +4,9 @@ import numpy as np
 from core.woe_stats import create_woe_df, get_bin_stats
 
 
-def plot_three_options(results, feature, x, y):
+def plot_options(results, feature):
     """
-    Compare 3 optimal binning strategies.
+    Compare all optimal binning strategies (one subplot per option).
 
     Each subplot:
         - Left Y-axis  : WOE
@@ -14,9 +14,16 @@ def plot_three_options(results, feature, x, y):
         - X-axis       : Bin
     """
 
-    fig, axes = plt.subplots(1, 3, figsize=(21, 6))
+    n = len(results)
+    cols = 3
+    rows = max(int(np.ceil(n / cols)), 1)
+
+    fig, axes = plt.subplots(rows, cols, figsize=(7 * cols, 6 * rows))
+    axes = np.atleast_2d(axes).reshape(-1)
 
     for ax_woe, (option_name, result) in zip(axes, results.items()):
+        x = result['x']
+        y = result['y']
         splits = result['splits']
         woe_df = create_woe_df(x, y, splits)
         woe_plot = woe_df[woe_df['Bin'] != 'Missing'].copy()
@@ -46,6 +53,9 @@ def plot_three_options(results, feature, x, y):
         handles_count, labels_count = ax_count.get_legend_handles_labels()
 
         ax_woe.legend(handles_woe + handles_count, labels_woe + labels_count, loc='best', fontsize=8)
+
+    for ax in axes[n:]:
+        ax.axis('off')
 
     fig.suptitle(f'{feature} - WOE Trend & Bin Count Comparison', fontsize=15)
     plt.tight_layout(rect=[0, 0, 1, 0.94])

@@ -8,6 +8,17 @@ Việc xác định khoảng bin thủ công đòi hỏi người dùng phải t
 
 Công cụ được xây dựng dựa trên thư viện **OptBinning**, nhưng được đơn giản hóa về cách sử dụng và bổ sung hướng dẫn trực quan nhằm hỗ trợ quá trình thực hiện chia bin và đánh giá kết quả.
 
+## Cài đặt
+Tải source code từ repository
+```
+git clone https://github.com/locluclak/AutoBinning_based_WOE_IV.git
+```
+
+Cài các thư viện phụ thuộc vào môi trường:
+```
+pip install -r requirement.txt
+```
+
 ## Chia bins theo lô (số lượng lớn)
 Cấu hình trong file `config.yaml` bao gồm tên file data, tên biến mục tiêu, các biến cần bỏ qua, các ràng buộc, tên file output.
 
