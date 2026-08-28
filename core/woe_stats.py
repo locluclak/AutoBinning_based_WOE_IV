@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-def create_woe_df(x, y, splits):
+def create_woe_df(x, y, splits, missing_first=False):
     """
     Create WOE / IV table from manually specified or optimal splits.
 
@@ -43,7 +43,10 @@ def create_woe_df(x, y, splits):
             'n_events': [(missing_mask & (data['target'] == 1)).sum()],
             'n_non_events': [(missing_mask & (data['target'] == 0)).sum()]
         })
-        grouped = pd.concat([grouped, missing_row], ignore_index=True)
+        if missing_first:
+            grouped = pd.concat([missing_row, grouped], ignore_index=True)
+        else:
+            grouped = pd.concat([grouped, missing_row], ignore_index=True)
 
     total_obs = len(data)
     total_events = (data['target'] == 1).sum()
@@ -65,7 +68,7 @@ def create_woe_df(x, y, splits):
     return grouped[['Bin', 'prob_n_obs', 'pct_event', 'pct_non_event', 'WOE', 'IV_detail', 'IV_total']].copy()
 
 
-def get_bin_stats(x, y, splits):
+def get_bin_stats(x, y, splits, missing_first=False):
     """
     Return observation count and proportion for each bin.
     Missing values are excluded because x used for optimization
@@ -81,6 +84,17 @@ def get_bin_stats(x, y, splits):
         .reset_index(name='n_obs')
     )
     stats['prob_n_obs'] = stats['n_obs'] / len(x)
+
+    missing_mask = x.isna()
+    if missing_first and missing_mask.any():
+        n_missing = int(missing_mask.sum())
+        missing_row = pd.DataFrame({
+            'bin': ['Missing'],
+            'n_obs': [n_missing],
+            'prob_n_obs': [n_missing / len(x)]
+        })
+        stats = pd.concat([missing_row, stats], ignore_index=True)
+
     return stats
 
 

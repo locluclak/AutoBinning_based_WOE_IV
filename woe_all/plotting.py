@@ -25,15 +25,15 @@ def plot_options(results, feature):
         x = result['x']
         y = result['y']
         splits = result['splits']
-        woe_df = create_woe_df(x, y, splits)
-        woe_plot = woe_df[woe_df['Bin'] != 'Missing'].copy()
+        missing_first = result.get('missing_first', False)
+        woe_df = create_woe_df(x, y, splits, missing_first=missing_first)
 
-        bin_stats = get_bin_stats(x=x, y=y, splits=splits)
+        bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first)
 
         n_bins = len(bin_stats)
         x_pos = np.arange(n_bins)
 
-        ax_woe.plot(x_pos, woe_plot['WOE'].values, marker='o', linewidth=2, label='WOE')
+        ax_woe.plot(x_pos, woe_df['WOE'].values, marker='o', linewidth=2, label='WOE')
         ax_woe.axhline(0, linestyle='--', linewidth=1)
 
         ax_woe.set_ylabel('WOE')

@@ -47,14 +47,24 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
     for option_name, trend in OPTIONS.items():
         optb = OptimalBinning(name=feature, dtype="numerical", min_n_bins=MIN_BIN, max_n_bins=MAX_BIN, min_bin_size=min_bin_size, max_bin_size=max_bin_size, min_event_rate_diff=min_event_rate_diff, monotonic_trend=trend)
         optb.fit(x, y_clean)
+
+        missing_first = considerMISSING and optb.status == "OPTIMAL"
+        if missing_first:
+            display_x = x_original
+            display_y = y
+        else:
+            display_x = x
+            display_y = y_clean
+
         results[f"{part} | {option_name}"] = {
             "part": part,
             "option": option_name,
             "model": optb,
             "splits": optb.splits,
             "binning_table": optb.binning_table,
-            "x": x,
-            "y": y_clean,
+            "x": display_x,
+            "y": display_y,
+            "missing_first": missing_first,
         }
 
     return results
