@@ -1,7 +1,7 @@
 import numpy as np
 from optbinning import OptimalBinning
 
-from core.config_loader import MAX_BIN, MIN_BIN, MIN_DIFF_WOE, SPECIALVALUE
+from core.config_loader import MAX_BIN, MAX_BIN_SIZE, MIN_BIN, MIN_BIN_SIZE, MIN_DIFF_WOE, SPECIALVALUE
 
 
 OPTIONS = {
@@ -16,7 +16,7 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
 
     zero_pct = (x_original == SPECIALVALUE).mean()
 
-    if zero_pct < 0.05:
+    if zero_pct < MIN_BIN_SIZE:
         mask_nonmissing = x_original.notna()
     else:
         mask_nonmissing = x_original.notna() & (x_original != SPECIALVALUE)
@@ -31,11 +31,11 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
         raise ValueError("Feature has no usable observations.")
 
     if considerMISSING:
-        min_bin_size = 0.05 * n_old / n_new
-        max_bin_size = min(0.50 * n_old / n_new, 1)
+        min_bin_size = MIN_BIN_SIZE * n_old / n_new
+        max_bin_size = min(MAX_BIN_SIZE * n_old / n_new, 1)
     else:
-        min_bin_size = 0.05
-        max_bin_size = 0.50
+        min_bin_size = MIN_BIN_SIZE
+        max_bin_size = MAX_BIN_SIZE
 
     p_bar = np.mean(y_clean)
     min_event_rate_diff = 2 * p_bar * (1 - p_bar) * np.tanh(MIN_DIFF_WOE / 2)

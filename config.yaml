@@ -5,4 +5,6 @@ min_bin: 4
 max_bin: 10
 specialvalue: 0
 min_diff_woe: 0.01
+min_bin_size: 0.05
+max_bin_size: 0.50
 ignore_column: [LABEL_IS_CASA_50M_AVG_AMT_LCL,LABEL_IS_SAVING_NEW_OPEN,LABEL_IS_SAVING_100M_NEW_OPEN]

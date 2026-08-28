@@ -16,3 +16,5 @@ MAX_BIN = CONFIG["max_bin"]
 SPECIALVALUE = CONFIG["specialvalue"]
 MIN_DIFF_WOE = CONFIG["min_diff_woe"]
 IGNORE_COLUMN = CONFIG.get("ignore_column", [])
+MIN_BIN_SIZE = CONFIG.get("min_bin_size", 0.05)
+MAX_BIN_SIZE = CONFIG.get("max_bin_size", 0.50)
