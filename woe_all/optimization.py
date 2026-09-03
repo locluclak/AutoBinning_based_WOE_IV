@@ -11,6 +11,13 @@ OPTIONS = {
 }
 
 
+class _InfeasibleModel:
+    def __init__(self):
+        self.status = "INFEASIBLE"
+        self.splits = []
+        self.binning_table = None
+
+
 def calculate_feature(feature, X_train, y, considerMISSING=False):
     x_original = X_train[feature].copy()
 
@@ -38,6 +45,8 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
         min_bin_size = MIN_BIN_SIZE
         max_bin_size = MAX_BIN_SIZE
 
+    infeasible = considerMISSING and min_bin_size > 0.5
+
     p_bar = np.mean(y_clean)
     min_event_rate_diff = 2 * p_bar * (1 - p_bar) * np.tanh(MIN_DIFF_WOE / 2)
 
@@ -46,8 +55,11 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
     results = {}
 
     for option_name, trend in OPTIONS.items():
-        optb = OptimalBinning(name=feature, dtype="numerical", min_n_bins=MIN_BIN, max_n_bins=MAX_BIN, min_bin_size=min_bin_size, max_bin_size=max_bin_size, min_event_rate_diff=min_event_rate_diff, monotonic_trend=trend)
-        optb.fit(x, y_clean)
+        if infeasible:
+            optb = _InfeasibleModel()
+        else:
+            optb = OptimalBinning(name=feature, dtype="numerical", min_n_bins=MIN_BIN, max_n_bins=MAX_BIN, min_bin_size=min_bin_size, max_bin_size=max_bin_size, min_event_rate_diff=min_event_rate_diff, monotonic_trend=trend)
+            optb.fit(x, y_clean)
 
         missing_first = considerMISSING and optb.status == "OPTIMAL"
         if special_allowed:
