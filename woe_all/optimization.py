@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from optbinning import OptimalBinning
 
 from core.config_loader import MAX_BIN, MAX_BIN_SIZE, MIN_BIN, MIN_BIN_SIZE, MIN_DIFF_WOE, SPECIALVALUE
@@ -15,6 +16,14 @@ class _InfeasibleModel:
     def __init__(self):
         self.status = "INFEASIBLE"
         self.splits = []
+        self.binning_table = None
+
+
+class _CategoricalModel:
+    """Placeholder model for categorical features: each group is already a bin."""
+    def __init__(self, groups):
+        self.status = "OK"
+        self.splits = list(groups)
         self.binning_table = None
 
 
@@ -87,5 +96,43 @@ def calculate_feature(feature, X_train, y, considerMISSING=False):
             "missing_first": missing_first,
             "specialvalue": SPECIALVALUE if special_allowed else None,
         }
+
+    return results
+
+
+def calculate_categorical_feature(feature, X_train, y, considerMISSING=False):
+    """
+    Compute WOE / IV for a categorical feature. No OptimalBinning is used:
+    every group (category value) is treated as one bin. The only choice is
+    between the 'considerMISSING' and 'removeMISSING' versions.
+    """
+    x_original = X_train[feature].copy()
+
+    if considerMISSING:
+        display_x = x_original
+        display_y = y
+        groups = [str(c) for c in pd.unique(x_original.dropna())]
+    else:
+        mask = x_original.notna()
+        display_x = x_original[mask]
+        display_y = y[mask]
+        groups = [str(c) for c in pd.unique(display_x)]
+
+    part = "considerMISSING" if considerMISSING else "removeMISSING"
+
+    results = {}
+    option_name = "Groups as bins"
+    results[f"{part} | {option_name}"] = {
+        "part": part,
+        "option": option_name,
+        "categorical": True,
+        "model": _CategoricalModel(groups),
+        "splits": groups,
+        "binning_table": None,
+        "x": display_x,
+        "y": display_y,
+        "missing_first": considerMISSING,
+        "specialvalue": None,
+    }
 
     return results

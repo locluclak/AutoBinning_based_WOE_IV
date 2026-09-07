@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from core.io_utils import load_data, write_data
-from core.woe_stats import create_woe_df
+from core.woe_stats import create_woe_df, create_woe_df_categorical, is_categorical
 
 
 def transform_feature(feature, x, y, splits, specialvalue=None, min_bin_size=0.05, consider_missing=True):
@@ -55,6 +55,34 @@ def transform_feature(feature, x, y, splits, specialvalue=None, min_bin_size=0.0
     return result
 
 
+def transform_categorical_feature(feature, x, y, categories, consider_missing=True):
+    woe_df = create_woe_df_categorical(x, y, missing_first=consider_missing)
+    woe_map = dict(zip(woe_df['Bin'], woe_df['WOE']))
+
+    result = pd.DataFrame(index=x.index)
+    result[f"{feature}_WOE"] = np.nan
+
+    bins_in_order = []
+    has_missing = x.isna().any()
+    if consider_missing and has_missing:
+        bins_in_order.append("Missing")
+    bins_in_order += [str(c) for c in categories]
+
+    bin_number = {b: i + 1 for i, b in enumerate(bins_in_order)}
+
+    for b in bins_in_order:
+        col = f"{feature}_bin{bin_number[b]}" if b != "Missing" else f"{feature}_MISSING"
+        result[col] = 0
+        if b == "Missing":
+            sel = x.isna()
+        else:
+            sel = x.notna() & (x.astype(str) == b)
+        result.loc[sel, col] = 1
+        result.loc[sel, f"{feature}_WOE"] = woe_map.get(b, np.nan)
+
+    return result
+
+
 def build_transformed(df, features_config, label_name, specialvalue=None, min_bin_size=0.05):
     X_train = df.drop(columns=[label_name])
     y = pd.Series(df[label_name].values, index=X_train.index)
@@ -69,12 +97,20 @@ def build_transformed(df, features_config, label_name, specialvalue=None, min_bi
             skipped.append((feature, "Missing in data"))
             continue
         try:
-            splits = list(map(float, cfg['splits']))
+            x = X_train[feature]
             part = cfg.get('part', 'considerMISSING')
             consider_missing = part == "considerMISSING"
-            x = X_train[feature]
-            tf = transform_feature(feature, x, y, splits, specialvalue=specialvalue,
-                                   min_bin_size=min_bin_size, consider_missing=consider_missing)
+            cfg_type = cfg.get('type')
+            if cfg_type == 'categorical' or (cfg_type is None and is_categorical(x)):
+                categories = [str(c) for c in cfg.get('splits', [])]
+                if not categories:
+                    categories = [str(c) for c in pd.unique(x.dropna())]
+                tf = transform_categorical_feature(feature, x, y, categories,
+                                                   consider_missing=consider_missing)
+            else:
+                splits = list(map(float, cfg['splits']))
+                tf = transform_feature(feature, x, y, splits, specialvalue=specialvalue,
+                                       min_bin_size=min_bin_size, consider_missing=consider_missing)
             transformed = pd.concat([transformed, tf], axis=1)
             print(f"OK: {feature}")
         except Exception as exc:

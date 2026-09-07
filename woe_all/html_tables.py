@@ -1,6 +1,8 @@
 def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, render: bool = True):
     """Generates and displays side-by-side formatted HTML WOE tables from results.
     """
+    from core.woe_stats import create_woe_df_categorical
+
     if formats is None:
         formats = {
             "prob_n_obs": "{:.2%}",
@@ -19,7 +21,10 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
         splits = result["splits"]
         missing_first = result.get("missing_first", False)
         specialvalue = result.get("specialvalue")
-        woe_df = create_woe_df_func(result["x"], result["y"], splits, missing_first=missing_first, specialvalue=specialvalue)
+        if result.get("categorical"):
+            woe_df = create_woe_df_categorical(result["x"], result["y"], missing_first=missing_first)
+        else:
+            woe_df = create_woe_df_func(result["x"], result["y"], splits, missing_first=missing_first, specialvalue=specialvalue)
         woe_tables[option_name] = woe_df
 
         valid_formats = {k: v for k, v in formats.items() if k in woe_df.columns}

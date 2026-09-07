@@ -6,21 +6,58 @@ import pandas as pd
 
 from core.config_loader import CONFIG, IGNORE_COLUMN
 from core.export_script import EXPORT_SCRIPT
-from core.woe_stats import create_woe_df, figure_to_base64
+from core.woe_stats import create_missing_woe_df, create_woe_df, figure_to_base64, is_categorical
 from .html_tables import display_woe_tables
-from .optimization import calculate_feature
-from .optimization import calculate_feature
+from .optimization import calculate_categorical_feature, calculate_feature
 from .plotting import plot_options
+
+
+MISSING_FORMATS = {
+    "prob_n_obs": "{:.2%}",
+    "pct_event": "{:.2%}",
+    "pct_non_event": "{:.2%}",
+    "WOE": "{:.2f}",
+    "IV_detail": "{:.2f}",
+    "IV_total": "{:.2f}",
+}
+
+
+def build_missing_table_html(x, y):
+    missing_woe_df = create_missing_woe_df(x, y)
+    valid_formats = {k: v for k, v in MISSING_FORMATS.items() if k in missing_woe_df.columns}
+    table_html = missing_woe_df.style.format(valid_formats).to_html()
+    return f"""
+    <div class="woe-table-container">
+        <div class="woe-row">
+            <div class="woe-row-label">Missing vs Non-Missing</div>
+            <div class="woe-row-columns">
+                <div class="woe-block">
+                    <h4 style="margin-bottom: 8px;">Missing vs Non-Missing</h4>
+                    {table_html}
+                </div>
+            </div>
+        </div>
+    </div>
+    """
 
 
 def build_feature_html(feature, X_train, y):
     results = {}
-    for consider in (False, True):
-        results.update(calculate_feature(feature, X_train, y, considerMISSING=consider))
+    if is_categorical(X_train[feature]):
+        for consider in (False, True):
+            results.update(calculate_categorical_feature(feature, X_train, y, considerMISSING=consider))
+    else:
+        for consider in (False, True):
+            results.update(calculate_feature(feature, X_train, y, considerMISSING=consider))
 
     parts = {}
     for option_name, result in results.items():
         parts.setdefault(result['part'], {})[result['option']] = result
+
+    option_names = []
+    for result in results.values():
+        if result['option'] not in option_names:
+            option_names.append(result['option'])
 
     plot_options(results, feature)
     fig = plt.gcf()
@@ -28,18 +65,28 @@ def build_feature_html(feature, X_train, y):
 
     _, tables_html = display_woe_tables(results=results, create_woe_df_func=create_woe_df, render=False)
 
+    missing_html = build_missing_table_html(X_train[feature], y)
+
     status_rows = []
     for idx, (part, part_results) in enumerate(parts.items()):
         option_cells = []
-        for option_name, result in part_results.items():
-            splits = list(map(float, result['splits']))
+        for option_name in option_names:
+            result = part_results.get(option_name)
+            if result is None:
+                option_cells.append("<td></td>")
+                continue
+            splits = list(result['splits'])
+            if not result.get('categorical'):
+                splits = list(map(float, splits))
+            ftype = "categorical" if result.get('categorical') else "continuous"
             status = result['model'].status
             option_cells.append(
                 f"<td>"
                 f"<label class=\"option-choice\">"
                 f"<input type=\"radio\" name=\"{escape(str(feature))}\" value=\"{idx}\" "
-                f"data-option=\"{escape(option_name)}\" "
-                f"data-part=\"{escape(result['part'])}\" "
+                f"data-option=\"{escape(str(option_name))}\" "
+                f"data-part=\"{escape(str(result['part']))}\" "
+                f"data-type=\"{ftype}\" "
                 f"data-splits=\"{escape(json.dumps(splits))}\" "
                 f"data-status=\"{escape(str(status))}\">{escape(option_name)}</label>"
                 f"<div class=\"option-status {escape(str(status).lower())}\">Status: {escape(str(status))}</div>"
@@ -54,10 +101,11 @@ def build_feature_html(feature, X_train, y):
             f"</tr>"
         )
 
+    option_headers = "".join(f"<th>{escape(o)}</th>" for o in option_names)
     status_html = f"""
     <table class="status-table" data-feature="{escape(str(feature))}">
         <thead>
-            <tr><th>Part</th><th>Free optimization</th><th>Monotonic</th><th>U-shape / heuristic</th></tr>
+            <tr><th>Part</th>{option_headers}</tr>
         </thead>
         <tbody>{''.join(status_rows)}</tbody>
     </table>
@@ -70,6 +118,7 @@ def build_feature_html(feature, X_train, y):
         <h3>WOE Trend &amp; Bin Count Comparison</h3>
         <img class="plot" src="data:image/png;base64,{plot_html}" alt="WOE plots for {escape(str(feature))}">
         <h3>WOE Tables</h3>
+        {missing_html}
         {tables_html}
     </section>
     <hr class="feature-separator">

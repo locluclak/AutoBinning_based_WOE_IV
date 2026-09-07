@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from core.woe_stats import create_woe_df, get_bin_stats
+from core.woe_stats import create_woe_df, create_woe_df_categorical, get_bin_stats, get_bin_stats_categorical
 
 
 def plot_options(results, feature):
@@ -27,9 +27,12 @@ def plot_options(results, feature):
         splits = result['splits']
         missing_first = result.get('missing_first', False)
         specialvalue = result.get('specialvalue')
-        woe_df = create_woe_df(x, y, splits, missing_first=missing_first, specialvalue=specialvalue)
-
-        bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
+        if result.get('categorical'):
+            woe_df = create_woe_df_categorical(x, y, missing_first=missing_first)
+            bin_stats = get_bin_stats_categorical(x=x, y=y, missing_first=missing_first)
+        else:
+            woe_df = create_woe_df(x, y, splits, missing_first=missing_first, specialvalue=specialvalue)
+            bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
 
         n_bins = len(bin_stats)
         x_pos = np.arange(n_bins)

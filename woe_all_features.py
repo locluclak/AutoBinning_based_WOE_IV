@@ -1,3 +1,4 @@
+# run with conda env name 'sacom'
 from pathlib import Path
 
 from core.config_loader import INPUT_FILE, OUTPUT_FILE, label_name

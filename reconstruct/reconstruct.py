@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from core.woe_stats import create_woe_df, figure_to_base64, get_bin_stats
+from core.woe_stats import (create_woe_df, create_woe_df_categorical, figure_to_base64,
+                            get_bin_stats, get_bin_stats_categorical, is_categorical)
 
 
 def woe_table_html(woe_df):
@@ -20,10 +21,14 @@ def woe_table_html(woe_df):
     return woe_df.style.format(valid_formats).to_html()
 
 
-def plot_feature(feature, x, y_clean, splits, specialvalue=None, missing_first=False):
+def plot_feature(feature, x, y_clean, splits, specialvalue=None, missing_first=False, categorical=False):
     fig, ax = plt.subplots(figsize=(7, 6))
-    woe_df = create_woe_df(x, y_clean, splits, missing_first=missing_first, specialvalue=specialvalue)
-    bin_stats = get_bin_stats(x=x, y=y_clean, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
+    if categorical:
+        woe_df = create_woe_df_categorical(x, y_clean, missing_first=missing_first)
+        bin_stats = get_bin_stats_categorical(x=x, y=y_clean, missing_first=missing_first)
+    else:
+        woe_df = create_woe_df(x, y_clean, splits, missing_first=missing_first, specialvalue=specialvalue)
+        bin_stats = get_bin_stats(x=x, y=y_clean, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
     if missing_first:
         woe_plot = woe_df.copy()
     else:
@@ -55,17 +60,29 @@ def plot_feature(feature, x, y_clean, splits, specialvalue=None, missing_first=F
     return figure_to_base64(fig)
 
 
-def build_feature_html(feature, x, y_clean, splits, option, specialvalue=None, consider_missing=False):
-    plot_html = plot_feature(feature, x, y_clean, splits, specialvalue=specialvalue, missing_first=consider_missing)
-    woe_df = create_woe_df(x, y_clean, splits, missing_first=consider_missing, specialvalue=specialvalue)
+def build_feature_html(feature, x, y_clean, splits, option, specialvalue=None, consider_missing=False,
+                       categorical=False, part=""):
+    plot_html = plot_feature(feature, x, y_clean, splits, specialvalue=specialvalue,
+                             missing_first=consider_missing, categorical=categorical)
+    if categorical:
+        woe_df = create_woe_df_categorical(x, y_clean, missing_first=consider_missing)
+    else:
+        woe_df = create_woe_df(x, y_clean, splits, missing_first=consider_missing, specialvalue=specialvalue)
     tables_html = woe_table_html(woe_df)
     iv_total = woe_df['IV_total'].iloc[0]
+
+    if categorical:
+        option_html = f'<p class="option">Selected version: {escape(part)}</p>'
+        splits_html = f'<p class="splits">Groups: {escape(str(splits))}</p>'
+    else:
+        option_html = f'<p class="option">Selected option: {escape(option)}</p>'
+        splits_html = f'<p class="splits">Splits: {escape(str(splits))}</p>'
 
     return f"""
     <section class="feature">
         <h2>{escape(str(feature))} <span class="iv">IV: {iv_total:.4f}</span></h2>
-        <p class="option">Selected option: {escape(option)}</p>
-        <p class="splits">Splits: {escape(str(splits))}</p>
+        {option_html}
+        {splits_html}
         <img class="plot" src="data:image/png;base64,{plot_html}" alt="WOE plot for {escape(str(feature))}">
         <h3>WOE Table</h3>
         {tables_html}
@@ -87,25 +104,46 @@ def build_report(df, features_config, label_name, specialvalue=None, min_bin_siz
             skipped.append((feature, "Missing in data"))
             continue
         try:
-            splits = list(map(float, cfg['splits']))
-            option = cfg.get('option', '')
-            part = cfg.get('part', 'removeMISSING')
-            consider_missing = part == "considerMISSING"
-            x_full = X_train[feature]
-            if consider_missing:
-                x = x_full
-                y_clean = y
+            cfg_type = cfg.get('type')
+            series = X_train[feature]
+            if cfg_type == 'categorical' or (cfg_type is None and is_categorical(series)):
+                categories = [str(c) for c in cfg.get('splits', [])]
+                if not categories:
+                    categories = [str(c) for c in pd.unique(series.dropna())]
+                option = cfg.get('option', '')
+                part = cfg.get('part', 'considerMISSING')
+                consider_missing = part == "considerMISSING"
+                x_full = X_train[feature]
+                if consider_missing:
+                    x = x_full
+                    y_clean = y
+                else:
+                    mask = x_full.notna()
+                    x = x_full[mask]
+                    y_clean = y[mask]
+                sections.append(build_feature_html(feature, x, y_clean, categories, option,
+                                                   consider_missing=consider_missing,
+                                                   categorical=True, part=part))
             else:
-                mask = x_full.notna()
-                x = x_full[mask]
-                y_clean = y[mask]
-            feature_special = None
-            if specialvalue is not None:
-                zero_pct = (x_full == specialvalue).mean()
-                if zero_pct >= min_bin_size:
-                    feature_special = specialvalue
-            sections.append(build_feature_html(feature, x, y_clean, splits, option,
-                                               specialvalue=feature_special, consider_missing=consider_missing))
+                splits = list(map(float, cfg['splits']))
+                option = cfg.get('option', '')
+                part = cfg.get('part', 'removeMISSING')
+                consider_missing = part == "considerMISSING"
+                x_full = X_train[feature]
+                if consider_missing:
+                    x = x_full
+                    y_clean = y
+                else:
+                    mask = x_full.notna()
+                    x = x_full[mask]
+                    y_clean = y[mask]
+                feature_special = None
+                if specialvalue is not None:
+                    zero_pct = (x_full == specialvalue).mean()
+                    if zero_pct >= min_bin_size:
+                        feature_special = specialvalue
+                sections.append(build_feature_html(feature, x, y_clean, splits, option,
+                                                   specialvalue=feature_special, consider_missing=consider_missing))
             print(f"OK: {feature}")
         except Exception as exc:
             skipped.append((feature, exc))
