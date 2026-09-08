@@ -210,14 +210,17 @@ def get_bin_stats(x, y, splits, missing_first=False, specialvalue=None):
     stats['prob_n_obs'] = stats['n_obs'] / len(x)
 
     missing_mask = x.isna()
-    if missing_first and missing_mask.any():
+    if missing_mask.any():
         n_missing = int(missing_mask.sum())
         missing_row = pd.DataFrame({
             'bin': ['Missing'],
             'n_obs': [n_missing],
             'prob_n_obs': [n_missing / len(x)]
         })
-        stats = pd.concat([missing_row, stats], ignore_index=True)
+        if missing_first:
+            stats = pd.concat([missing_row, stats], ignore_index=True)
+        else:
+            stats = pd.concat([stats, missing_row], ignore_index=True)
 
     if special_mask.any():
         n_special = int(special_mask.sum())
