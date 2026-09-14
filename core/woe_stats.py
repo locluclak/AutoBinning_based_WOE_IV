@@ -115,12 +115,15 @@ def create_woe_df(x, y, splits, missing_first=False, specialvalue=None, special=
         special_rows = []
         for v in value_specials:
             mask = data['x'] == v
+            if not mask.any():
+                continue
             special_rows.append({
                 'bin': f'Special {v}',
                 'n_events': int((mask & (data['target'] == 1)).sum()),
                 'n_non_events': int((mask & (data['target'] == 0)).sum()),
             })
-        special_df = pd.DataFrame(special_rows)
+        if special_rows:
+            special_df = pd.DataFrame(special_rows)
 
     missing_df = None
     missing_mask = data['x'].isna()
@@ -363,56 +366,58 @@ def add_score_column(woe_df, v_c):
     return df
 
 
-def get_bin_stats(x, y, splits, missing_first=False, specialvalue=None):
+def get_bin_stats(x, y, splits, missing_first=False, specialvalue=None, special=None):
     """
-    Return observation count and proportion for each bin.
-    Missing values are excluded because x used for optimization
-    has already removed missing values.
+    Return observation count and proportion for each bin (including special
+    groups rendered as their own bins, mirroring create_woe_df ordering).
     """
-    bin_edges = [-np.inf] + list(splits) + [np.inf]
+    special_values = _normalize_special(special, specialvalue)
+    value_specials = [v for v in special_values if v != 'MISSING']
 
-    if specialvalue is not None:
-        special_mask = (x == specialvalue)
-        bins = pd.cut(x[~special_mask], bins=bin_edges, right=True, include_lowest=True)
-        stats = (pd.DataFrame({'bin': bins, 'target': y[~special_mask]})
-            .groupby('bin', observed=False)
-            .size()
-            .reset_index(name='n_obs')
-        )
-    else:
-        special_mask = pd.Series(False, index=x.index)
-        bins = pd.cut(x, bins=bin_edges, right=True, include_lowest=True)
-        stats = (pd.DataFrame({'bin': bins, 'target': y})
-            .groupby('bin', observed=False)
-            .size()
-            .reset_index(name='n_obs')
-        )
+    keep = x.notna()
+    if value_specials:
+        keep = keep & ~x.isin(value_specials)
+
+    bin_edges = [-np.inf] + list(splits) + [np.inf]
+    bins = pd.cut(x[keep], bins=bin_edges, right=True, include_lowest=True)
+    stats = (pd.DataFrame({'bin': bins, 'target': y[keep]})
+        .groupby('bin', observed=False)
+        .size()
+        .reset_index(name='n_obs'))
     stats['prob_n_obs'] = stats['n_obs'] / len(x)
 
+    special_stats = None
+    if value_specials:
+        special_rows = []
+        for v in value_specials:
+            mask = x == v
+            if not mask.any():
+                continue
+            special_rows.append({
+                'bin': f'Special {v}',
+                'n_obs': int(mask.sum()),
+                'prob_n_obs': mask.sum() / len(x),
+            })
+        if special_rows:
+            special_stats = pd.DataFrame(special_rows)
+
+    missing_stats = None
     missing_mask = x.isna()
     if missing_mask.any():
-        n_missing = int(missing_mask.sum())
-        missing_row = pd.DataFrame({
+        missing_stats = pd.DataFrame({
             'bin': ['Missing'],
-            'n_obs': [n_missing],
-            'prob_n_obs': [n_missing / len(x)]
+            'n_obs': [int(missing_mask.sum())],
+            'prob_n_obs': [missing_mask.sum() / len(x)],
         })
-        if missing_first:
-            stats = pd.concat([missing_row, stats], ignore_index=True)
-        else:
-            stats = pd.concat([stats, missing_row], ignore_index=True)
 
-    if special_mask.any():
-        n_special = int(special_mask.sum())
-        special_row = pd.DataFrame({
-            'bin': [f'Special {specialvalue}'],
-            'n_obs': [n_special],
-            'prob_n_obs': [n_special / len(x)]
-        })
-        if missing_first and missing_mask.any():
-            stats = pd.concat([stats.iloc[:1], special_row, stats.iloc[1:]], ignore_index=True)
-        else:
-            stats = pd.concat([special_row, stats], ignore_index=True)
+    if missing_first:
+        stats = pd.concat(
+            [d for d in (missing_stats, stats, special_stats) if d is not None and len(d)],
+            ignore_index=True)
+    else:
+        stats = pd.concat(
+            [d for d in (special_stats, stats, missing_stats) if d is not None and len(d)],
+            ignore_index=True)
 
     return stats
 

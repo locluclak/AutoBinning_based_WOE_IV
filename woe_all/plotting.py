@@ -26,13 +26,13 @@ def plot_options(results, feature):
         y = result['y']
         splits = result['splits']
         missing_first = result.get('missing_first', False)
-        specialvalue = result.get('specialvalue')
+        special = result.get('special')
         if result.get('categorical'):
             woe_df = create_woe_df_categorical(x, y, missing_first=missing_first)
             bin_stats = get_bin_stats_categorical(x=x, y=y, missing_first=missing_first)
         else:
-            woe_df = create_woe_df(x, y, splits, missing_first=missing_first, specialvalue=specialvalue)
-            bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first, specialvalue=specialvalue)
+            woe_df = create_woe_df(x, y, splits, missing_first=missing_first, special=special)
+            bin_stats = get_bin_stats(x=x, y=y, splits=splits, missing_first=missing_first, special=special)
 
         n_bins = len(bin_stats)
         x_pos = np.arange(n_bins)
