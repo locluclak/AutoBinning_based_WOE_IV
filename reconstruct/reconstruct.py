@@ -4,11 +4,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from core.woe_stats import (create_woe_df, create_woe_df_categorical, figure_to_base64,
+from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
+                            cramer_v_color, cramer_v_type, create_woe_df,
+                            create_woe_df_categorical, figure_to_base64, format_p_value,
                             get_bin_stats, get_bin_stats_categorical, is_categorical)
 
 
-def woe_table_html(woe_df):
+def woe_table_html(woe_df, v_c):
     formats = {
         "prob_n_obs": "{:.2%}",
         "pct_event": "{:.2%}",
@@ -16,9 +18,11 @@ def woe_table_html(woe_df):
         "WOE": "{:.4f}",
         "IV_detail": "{:.4f}",
         "IV_total": "{:.4f}",
+        "score": "{:.4f}",
     }
-    valid_formats = {k: v for k, v in formats.items() if k in woe_df.columns}
-    return woe_df.style.format(valid_formats).to_html()
+    display_df = add_score_column(woe_df, v_c).drop(columns=["IV_total"])
+    valid_formats = {k: v for k, v in formats.items() if k in display_df.columns}
+    return display_df.style.format(valid_formats).to_html()
 
 
 def plot_feature(feature, x, y_clean, splits, specialvalue=None, missing_first=False, categorical=False):
@@ -68,8 +72,21 @@ def build_feature_html(feature, x, y_clean, splits, option, specialvalue=None, c
         woe_df = create_woe_df_categorical(x, y_clean, missing_first=consider_missing)
     else:
         woe_df = create_woe_df(x, y_clean, splits, missing_first=consider_missing, specialvalue=specialvalue)
-    tables_html = woe_table_html(woe_df)
+
+    if categorical:
+        p_value, v_c = chi2_cramers_categorical(x, y_clean)
+    else:
+        p_value, v_c = chi2_cramers(x, y_clean, splits, specialvalue=specialvalue)
+    tables_html = woe_table_html(woe_df, v_c)
     iv_total = woe_df['IV_total'].iloc[0]
+
+    p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
+    p_html = f'<span style="color:{p_color}">p-value: {format_p_value(p_value)}</span>'
+    v_color = cramer_v_color(v_c)
+    v_html = (
+        f'<span style="color:{v_color}; font-size: 0.9em;">'
+        f"Cramer's V: {v_c:.4f} - Type: {cramer_v_type(v_c)}</span>"
+    )
 
     if categorical:
         option_html = f'<p class="option">Selected version: {escape(part)}</p>'
@@ -80,7 +97,8 @@ def build_feature_html(feature, x, y_clean, splits, option, specialvalue=None, c
 
     return f"""
     <section class="feature">
-        <h2>{escape(str(feature))} <span class="iv">IV: {iv_total:.4f}</span></h2>
+        <h2>{escape(str(feature))} <span class="iv">IV: {iv_total:.4f}</span> {p_html}</h2>
+        <p class="cramers">{v_html}</p>
         {option_html}
         {splits_html}
         <img class="plot" src="data:image/png;base64,{plot_html}" alt="WOE plot for {escape(str(feature))}">
@@ -177,6 +195,7 @@ h1.title {{ text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px
 h3 {{ margin-top: 24px; }}
 .plot {{ display: block; max-width: 40%; height: auto; }}
 .iv {{ color: #007bff; font-weight: normal; font-size: 0.8em; }}
+.cramers {{ margin: 4px 0; font-size: 0.9em; }}
 .option {{ color: #555; }}
 .splits {{ color: #777; font-size: 0.9em; }}
 table, th, td {{ border: 1px solid #ccc; border-collapse: collapse; }}

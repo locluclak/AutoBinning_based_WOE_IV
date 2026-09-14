@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 
 from core.io_utils import load_data, write_data
-from core.woe_stats import create_woe_df, create_woe_df_categorical, is_categorical
+from core.woe_stats import (create_woe_df, create_woe_df_categorical, is_categorical,
+                            add_score_column, chi2_cramers, chi2_cramers_categorical)
 
 
 def transform_feature(feature, x, y, splits, specialvalue=None, min_bin_size=0.05, consider_missing=True):
@@ -18,10 +19,14 @@ def transform_feature(feature, x, y, splits, specialvalue=None, min_bin_size=0.0
         feature_special = specialvalue
 
     woe_df = create_woe_df(x, y, splits, missing_first=consider_missing, specialvalue=feature_special)
+    _, v_c = chi2_cramers(x, y, splits, specialvalue=feature_special)
+    score_df = add_score_column(woe_df, v_c)
     woe_map = dict(zip(woe_df['Bin'], woe_df['WOE']))
+    score_map = dict(zip(score_df['Bin'], score_df['score']))
 
     result = pd.DataFrame(index=x.index)
     result[f"{feature}_WOE"] = np.nan
+    result[f"{feature}_score"] = np.nan
 
     bin_edges = [-np.inf] + list(splits) + [np.inf]
     numeric_mask = x.notna()
@@ -51,16 +56,21 @@ def transform_feature(feature, x, y, splits, specialvalue=None, min_bin_size=0.0
             sel = numeric_mask & (cat.astype(str) == b)
         result.loc[sel, col] = 1
         result.loc[sel, f"{feature}_WOE"] = woe_map.get(b, np.nan)
+        result.loc[sel, f"{feature}_score"] = score_map.get(b, np.nan)
 
     return result
 
 
 def transform_categorical_feature(feature, x, y, categories, consider_missing=True):
     woe_df = create_woe_df_categorical(x, y, missing_first=consider_missing)
+    _, v_c = chi2_cramers_categorical(x, y)
+    score_df = add_score_column(woe_df, v_c)
     woe_map = dict(zip(woe_df['Bin'], woe_df['WOE']))
+    score_map = dict(zip(score_df['Bin'], score_df['score']))
 
     result = pd.DataFrame(index=x.index)
     result[f"{feature}_WOE"] = np.nan
+    result[f"{feature}_score"] = np.nan
 
     bins_in_order = []
     has_missing = x.isna().any()
@@ -79,6 +89,7 @@ def transform_categorical_feature(feature, x, y, categories, consider_missing=Tr
             sel = x.notna() & (x.astype(str) == b)
         result.loc[sel, col] = 1
         result.loc[sel, f"{feature}_WOE"] = woe_map.get(b, np.nan)
+        result.loc[sel, f"{feature}_score"] = score_map.get(b, np.nan)
 
     return result
 

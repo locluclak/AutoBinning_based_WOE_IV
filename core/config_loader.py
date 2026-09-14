@@ -14,6 +14,9 @@ label_name = CONFIG["label_name"]
 MIN_BIN = CONFIG["min_bin"]
 MAX_BIN = CONFIG["max_bin"]
 SPECIALVALUE = CONFIG["specialvalue"]
+SPECIAL = CONFIG.get("special")
+if SPECIAL is None:
+    SPECIAL = [SPECIALVALUE] if SPECIALVALUE is not None else []
 MIN_DIFF_WOE = CONFIG["min_diff_woe"]
 IGNORE_COLUMN = CONFIG.get("ignore_column", [])
 MIN_BIN_SIZE = CONFIG.get("min_bin_size", 0.05)
