@@ -24,15 +24,22 @@ MISSING_FORMATS = {
 
 def build_missing_table_html(x, y):
     missing_woe_df = create_missing_woe_df(x, y)
-    valid_formats = {k: v for k, v in MISSING_FORMATS.items() if k in missing_woe_df.columns}
-    table_html = missing_woe_df.style.format(valid_formats).to_html()
+    iv_total = missing_woe_df["IV_total"].iloc[0] if "IV_total" in missing_woe_df.columns else None
+    display_df = missing_woe_df.drop(columns=["IV_total"], errors="ignore")
+    valid_formats = {k: v for k, v in MISSING_FORMATS.items() if k in display_df.columns}
+    table_html = display_df.style.format(valid_formats).to_html()
+    if iv_total is not None:
+        iv_total_text = MISSING_FORMATS.get("IV_total", "{:.2f}").format(iv_total)
+        title = f"<span class=\"iv-total\">IV total: {iv_total_text}</span>"
+    else:
+        title = ""
     return f"""
     <div class="woe-table-container">
         <div class="woe-row">
             <div class="woe-row-label">Missing vs Non-Missing</div>
             <div class="woe-row-columns">
                 <div class="woe-block">
-                    <h4 style="margin-bottom: 8px;">Missing vs Non-Missing</h4>
+                    <h4 style="margin-bottom: 8px;">{title}</h4>
                     {table_html}
                 </div>
             </div>
@@ -186,6 +193,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .woe-row-label {{ font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; min-width: 160px; flex: 0 0 auto; }}
 .woe-row-columns {{ display: flex; flex-direction: row; gap: 15px; width: 100%; overflow-x: auto; }}
 .woe-block {{ flex: 1 1 0; min-width: 320px; overflow-x: auto; }}
+.iv-total {{ color: #007bff; font-size: 0.9em; font-weight: normal; }}
 .woe-table-container table {{ border-collapse: separate; table-layout: auto; width: 100%; }}
 .woe-table-container td, .woe-table-container th {{ white-space: nowrap; }}
 .skipped {{ margin-top: 40px; }}
