@@ -13,7 +13,7 @@ OUTPUT_FILE = CONFIG["output_file"]
 label_name = CONFIG["label_name"]
 MIN_BIN = CONFIG["min_bin"]
 MAX_BIN = CONFIG["max_bin"]
-SPECIALVALUE = CONFIG["specialvalue"]
+SPECIALVALUE = CONFIG.get("specialvalue")
 SPECIAL = CONFIG.get("special")
 if SPECIAL is None:
     SPECIAL = [SPECIALVALUE] if SPECIALVALUE is not None else []

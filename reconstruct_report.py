@@ -18,6 +18,9 @@ def main(export_json: str, output_file: str = None):
     label_name = config.get("label_name", "LABEL")
     ignore_columns = config.get("ignore_column", [])
     specialvalue = config.get("specialvalue")
+    special = config.get("special")
+    if special is None:
+        special = [specialvalue] if specialvalue is not None else []
     min_bin_size = config.get("min_bin_size", 0.05)
 
     output_file = output_file or config.get("output_file", "reconstructed_report.html")
@@ -26,7 +29,7 @@ def main(export_json: str, output_file: str = None):
     if ignore_columns:
         df = df.drop(columns=[c for c in ignore_columns if c in df.columns])
 
-    html = build_report(df, features_config, label_name, specialvalue=specialvalue, min_bin_size=min_bin_size)
+    html = build_report(df, features_config, label_name, special=special, min_bin_size=min_bin_size)
     Path(output_file).write_text(html, encoding="utf-8")
     print(f"HTML report: {output_file}")
 

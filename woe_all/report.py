@@ -52,10 +52,10 @@ def build_feature_html(feature, X_train, y):
     results = {}
     if is_categorical(X_train[feature]):
         for consider in (False, True):
-            results.update(calculate_categorical_feature(feature, X_train, y, considerMISSING=consider))
+            results.update(calculate_categorical_feature(feature, X_train, y, considerSPECIAL=consider))
     else:
         for consider in (False, True):
-            results.update(calculate_feature(feature, X_train, y, considerMISSING=consider))
+            results.update(calculate_feature(feature, X_train, y, considerSPECIAL=consider))
 
     parts = {}
     for option_name, result in results.items():
