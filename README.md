@@ -118,7 +118,11 @@ Run the following command to reproduce the results in the .json file as HTML:
 python reconstruct_report.py selected_feature_splits.json output.html
 ```
 
+## Export binning info to csv file
 
+```
+python generate_bins_csv.py selected_feature_splits.json output.csv
+```
 
 ## Generating data with new transformed features
 ```
