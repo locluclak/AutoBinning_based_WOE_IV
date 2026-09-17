@@ -44,6 +44,12 @@ Chạy dòng lệnh để tái tạo kết quả trong file .json thành HTML.
 python reconstruct_report.py selected_feature_splits.json output.html
 ```
 
+## Xuất thông tin chia bin ra file .csv
+Chạy dòng lệnh để tái tạo kết quả trong file .json thành csv.
+```
+python generate_bins_csv.py selected_feature_splits.json output.csv
+```
+
 ## Tạo dữ liệu với transform feature mới
 ```
 python transform_data.py selected_feature_splits.json transformed.csv
