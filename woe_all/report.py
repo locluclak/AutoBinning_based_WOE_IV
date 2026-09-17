@@ -1,12 +1,13 @@
 import json
 from html import escape
 
-import matplotlib.pyplot as plt
 import pandas as pd
 
 from core.config_loader import CONFIG, IGNORE_COLUMN
 from core.export_script import EXPORT_SCRIPT
-from core.woe_stats import create_missing_woe_df, create_woe_df, figure_to_base64, is_categorical
+from core.woe_stats import (chi2_cramers, chi2_cramers_categorical, cramer_v_type,
+                            create_missing_woe_df, create_woe_df, create_woe_df_categorical,
+                            figure_to_base64, is_categorical)
 from .html_tables import display_woe_tables
 from .optimization import calculate_categorical_feature, calculate_feature
 from .plotting import plot_options
@@ -30,7 +31,13 @@ def build_missing_table_html(x, y):
     table_html = display_df.style.format(valid_formats).to_html()
     if iv_total is not None:
         iv_total_text = MISSING_FORMATS.get("IV_total", "{:.2f}").format(iv_total)
-        title = f"<span class=\"iv-total\">IV total: {iv_total_text}</span>"
+        iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+        title = (
+            f'<span class="iv-total">'
+            f'<span class="iv-label">IV total:</span> '
+            f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
+            f'</span>'
+        )
     else:
         title = ""
     return f"""
@@ -39,7 +46,7 @@ def build_missing_table_html(x, y):
             <div class="woe-row-label">Missing vs Non-Missing</div>
             <div class="woe-row-columns">
                 <div class="woe-block">
-                    <h4 style="margin-bottom: 8px;">{title}</h4>
+                    <div style="margin-bottom: 6px;">{title}</div>
                     {table_html}
                 </div>
             </div>
@@ -48,7 +55,12 @@ def build_missing_table_html(x, y):
     """
 
 
-def build_feature_html(feature, X_train, y):
+def compute_feature_results(feature, X_train, y):
+    """Compute all binning options/parts for a feature.
+
+    Shared by the static HTML report and the Streamlit app.
+    Returns (results, parts, option_names).
+    """
     results = {}
     if is_categorical(X_train[feature]):
         for consider in (False, True):
@@ -66,13 +78,103 @@ def build_feature_html(feature, X_train, y):
         if result['option'] not in option_names:
             option_names.append(result['option'])
 
-    plot_options(results, feature)
-    fig = plt.gcf()
-    plot_html = figure_to_base64(fig)
+    return results, parts, option_names
+
+
+def feature_summary(feature, X_train, y, results):
+    """Return (feature_type, iv_total, cramer_type) used for filtering.
+
+    iv_total / Cramer's V type come from the best (max IV) optimal option.
+    """
+    ftype = "categorical" if is_categorical(X_train[feature]) else "continuous"
+    best = None
+    for result in results.values():
+        if result['model'].status not in ("OPTIMAL", "OK"):
+            continue
+        if result.get('categorical'):
+            woe_df = create_woe_df_categorical(result['x'], result['y'],
+                                               missing_first=result.get('missing_first', False))
+            _, v_c = chi2_cramers_categorical(result['x'], result['y'])
+        else:
+            woe_df = create_woe_df(result['x'], result['y'], result['splits'],
+                                   missing_first=result.get('missing_first', False),
+                                   special=result.get('special'))
+            _, v_c = chi2_cramers(result['x'], result['y'], result['splits'],
+                                  special=result.get('special'))
+        iv = float(woe_df['IV_total'].iloc[0])
+        if best is None or iv > best[0]:
+            best = (iv, v_c)
+    if best is None:
+        best = (0.0, 0.0)
+    return ftype, best[0], cramer_v_type(best[1])
+
+
+def build_summary_html(meta):
+    """Build the summary section shown at the top of the HTML report.
+
+    meta : list of dicts with keys feature/type/iv_total/v_type.
+    """
+    if not meta:
+        return ""
+    total = len(meta)
+    continuous = [m for m in meta if m['type'] == 'continuous']
+    categorical = [m for m in meta if m['type'] == 'categorical']
+    high_iv = [m for m in meta if m['iv_total'] > 0.2]
+
+    def names(items):
+        return ", ".join(escape(str(m['feature'])) for m in items)
+
+    def details(title, items, default_open=False):
+        return (
+            f"<details{' open' if default_open else ''}>"
+            f"<summary>{escape(title)}</summary>"
+            f"<p>{names(items)}</p>"
+            f"</details>"
+        )
+
+    metrics = (
+        f'<div class="metric"><div class="value">{total}</div><div class="label">Total features</div></div>'
+        f'<div class="metric"><div class="value">{len(continuous)}</div><div class="label">Continuous</div></div>'
+        f'<div class="metric"><div class="value">{len(categorical)}</div><div class="label">Categorical</div></div>'
+        f'<div class="metric"><div class="value">{len(high_iv)}</div><div class="label">IV total &gt; 0.2</div></div>'
+    )
+
+    lists = [details(f"Continuous features ({len(continuous)})", continuous, default_open=True),
+             details(f"Categorical features ({len(categorical)})", categorical, default_open=True)]
+    for vt in ("Strong", "Good", "Medium", "Weak"):
+        items = [m for m in meta if m['v_type'] == vt]
+        lists.append(details(f"Cramer's V type {vt} ({len(items)})", items))
+    lists.append(details(f"Features with IV total > 0.2 ({len(high_iv)})", high_iv))
+
+    return f"""
+    <section class="summary">
+        <h2>Summary</h2>
+        <div class="summary-metrics">{metrics}</div>
+        <div class="summary-lists">{''.join(lists)}</div>
+    </section>
+    """
+
+
+def build_feature_html(feature, X_train, y, results=None, parts=None, option_names=None):
+    if results is None:
+        results, parts, option_names = compute_feature_results(feature, X_train, y)
+
+    plot_sections = []
+    for part, fig in plot_options(results, feature):
+        plot_sections.append(
+            f'<div class="plot-part">'
+            f'<div class="woe-group-title">{escape(part)}</div>'
+            f'<img class="plot" src="data:image/png;base64,{figure_to_base64(fig)}" '
+            f'alt="WOE plots for {escape(str(feature))}">'
+            f'</div>'
+        )
+    plot_html = "".join(plot_sections)
 
     _, tables_html = display_woe_tables(results=results, create_woe_df_func=create_woe_df, render=False)
 
     missing_html = build_missing_table_html(X_train[feature], y)
+
+    ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
 
     status_rows = []
     for idx, (part, part_results) in enumerate(parts.items()):
@@ -119,16 +221,16 @@ def build_feature_html(feature, X_train, y):
     """
 
     return f"""
-    <section class="feature">
+    <section class="feature" data-feature="{escape(str(feature))}" data-type="{ftype}" data-iv="{iv_total:.4f}" data-vtype="{v_type}">
         <h2>{escape(str(feature))}</h2>
         {status_html}
         <h3>WOE Trend &amp; Bin Count Comparison</h3>
-        <img class="plot" src="data:image/png;base64,{plot_html}" alt="WOE plots for {escape(str(feature))}">
+        {plot_html}
         <h3>WOE Tables</h3>
         {missing_html}
         {tables_html}
+        <hr class="feature-separator">
     </section>
-    <hr class="feature-separator">
     """
 
 
@@ -140,14 +242,25 @@ def build_report(df:pd.DataFrame, label_name = "LABEL"):
 
     sections = []
     skipped = []
+    feature_meta = []
 
     for feature in features:
         try:
-            sections.append(build_feature_html(feature, X_train, y))
+            results, parts, option_names = compute_feature_results(feature, X_train, y)
+            ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
+            feature_meta.append({
+                "feature": feature,
+                "type": ftype,
+                "iv_total": iv_total,
+                "v_type": v_type,
+            })
+            sections.append(build_feature_html(feature, X_train, y, results, parts, option_names))
             print(f"OK: {feature}")
         except Exception as exc:
             skipped.append((feature, exc))
             print(f"SKIP: {feature} -> {type(exc).__name__}: {exc}")
+
+    summary_html = build_summary_html(feature_meta)
 
     skipped_html = ""
     if skipped:
@@ -175,8 +288,11 @@ body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
 h1 {{ margin-bottom: 8px; }}
 h1.title {{ text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px; }}
 h2 {{ margin-top: 0; }}
+.feature h2 {{ font-size: 28px; }}
 h3 {{ margin-top: 24px; }}
 .plot {{ display: block; max-width: 100%; height: auto; }}
+.plot-part {{ margin-bottom: 20px; }}
+.woe-group-title {{ margin: 8px 0 6px; font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; display: inline-block; }}
 table, th, td {{ border: 1px solid #ccc; border-collapse: collapse; }}
 th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table {{ border-collapse: collapse; margin: 12px 0 20px; width: 100%; }}
@@ -189,15 +305,34 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table .option-status.infeasible {{ color: #dc2626; }}
 .status-table .option-splits {{ color: #777; font-size: 0.85em; }}
 .woe-table-container {{ display: flex; flex-direction: column; gap: 20px; }}
-.woe-row {{ display: flex; align-items: flex-start; gap: 12px; }}
-.woe-row-label {{ font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; min-width: 160px; flex: 0 0 auto; }}
+.woe-row {{ display: flex; flex-direction: column; gap: 8px; }}
+.woe-row-label {{ font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; align-self: flex-start; }}
 .woe-row-columns {{ display: flex; flex-direction: row; gap: 15px; width: 100%; overflow-x: auto; }}
 .woe-block {{ flex: 1 1 0; min-width: 320px; overflow-x: auto; }}
-.iv-total {{ color: #007bff; font-size: 0.9em; font-weight: normal; }}
+.iv-total {{ color: #555; font-size: 0.9em; font-weight: normal; }}
+.iv-label {{ color: #555; font-weight: normal; }}
+.p-value {{ font-size: 0.9em; }}
+.stat-label {{ font-weight: normal; }}
 .woe-table-container table {{ border-collapse: separate; table-layout: auto; width: 100%; }}
 .woe-table-container td, .woe-table-container th {{ white-space: nowrap; }}
 .skipped {{ margin-top: 40px; }}
 .feature-separator {{ border: 0; border-top: 3px solid #999; margin: 36px 0; }}
+.filter-bar {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px 16px; margin: 12px 0 24px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }}
+.filter-group {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }}
+.filter-label {{ font-weight: bold; color: #333; }}
+.filter-bar input[type="number"] {{ width: 90px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
+.filter-bar input[type="text"] {{ width: 300px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
+.filter-bar label {{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }}
+#filter-count {{ font-weight: bold; color: #007bff; margin-left: auto; }}
+.summary {{ margin: 16px 0 24px; }}
+.summary-metrics {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }}
+.metric {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 18px; text-align: center; min-width: 120px; }}
+.metric .value {{ font-size: 26px; font-weight: bold; color: #111; }}
+.metric .label {{ color: #555; font-size: 0.85em; }}
+.summary-lists {{ display: flex; flex-direction: column; gap: 6px; }}
+.summary-lists details {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px 12px; }}
+.summary-lists summary {{ font-weight: bold; cursor: pointer; color: #333; }}
+.summary-lists details p {{ margin: 8px 0 2px; color: #222; }}
 </style>
 </head>
 <body>
@@ -208,11 +343,55 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 </div>
 <h1 class="title">{escape(str(label_name))}</h1>
 <p>Features are processed independently. A feature that raises an exception is skipped.</p>
+{summary_html}
+<div class="filter-bar">
+    <span class="filter-group">
+        <span class="filter-label">Type:</span>
+        <label><input type="checkbox" class="filter-type" value="continuous" checked>Continuous</label>
+        <label><input type="checkbox" class="filter-type" value="categorical" checked>Categorical</label>
+    </span>
+    <span class="filter-group">
+        <span class="filter-label">Min IV total:</span>
+        <input type="number" id="filter-iv" min="0" step="0.05" value="0">
+    </span>
+    <span class="filter-group">
+        <span class="filter-label">Cramer's V type:</span>
+        <label><input type="checkbox" class="filter-vtype" value="Strong" checked>Strong</label>
+        <label><input type="checkbox" class="filter-vtype" value="Good" checked>Good</label>
+        <label><input type="checkbox" class="filter-vtype" value="Medium" checked>Medium</label>
+        <label><input type="checkbox" class="filter-vtype" value="Weak" checked>Weak</label>
+    </span>
+    <span class="filter-group">
+        <span class="filter-label">Feature names:</span>
+        <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
+    </span>
+    <span id="filter-count">Showing all</span>
+</div>
 {''.join(sections)}
 {skipped_html}
 <script>
 const APP_CONFIG = {json.dumps(CONFIG, ensure_ascii=False)};
 {EXPORT_SCRIPT}
+function applyFilters() {{
+    const types = Array.from(document.querySelectorAll('.filter-type:checked')).map(c => c.value);
+    const vtypes = Array.from(document.querySelectorAll('.filter-vtype:checked')).map(c => c.value);
+    const minIv = parseFloat(document.getElementById('filter-iv').value) || 0;
+    const rawNames = document.getElementById('filter-names').value;
+    const names = rawNames.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+    const sections = document.querySelectorAll('section.feature');
+    let shown = 0;
+    sections.forEach(s => {{
+        const nameOk = names.length === 0 || names.includes(s.dataset.feature.toLowerCase());
+        const ok = nameOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv;
+        s.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+    }});
+    document.getElementById('filter-count').textContent = `Showing ${{shown}} / ${{sections.length}}`;
+}}
+document.querySelectorAll('.filter-type, .filter-vtype').forEach(el => el.addEventListener('change', applyFilters));
+document.getElementById('filter-iv').addEventListener('input', applyFilters);
+document.getElementById('filter-names').addEventListener('input', applyFilters);
+applyFilters();
 </script>
 </body>
 </html>

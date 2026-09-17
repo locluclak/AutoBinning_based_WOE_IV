@@ -79,13 +79,28 @@ def build_feature_html(feature, x, y_clean, splits, option, special=None, consid
         p_value, v_c = chi2_cramers(x, y_clean, splits, special=special)
     tables_html = woe_table_html(woe_df, v_c)
     iv_total = woe_df['IV_total'].iloc[0]
+    iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+    iv_html = (
+        f'<span class="iv">'
+        f'<span class="iv-label">IV:</span> '
+        f'<b style="color:{iv_color}">{iv_total:.4f}</b>'
+        f'</span>'
+    )
 
     p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
-    p_html = f'<span style="color:{p_color}">p-value: {format_p_value(p_value)}</span>'
+    p_html = (
+        f'<span style="color:{p_color}">'
+        f'<span class="stat-label">p-value:</span> '
+        f'<b>{format_p_value(p_value)}</b>'
+        f'</span>'
+    )
     v_color = cramer_v_color(v_c)
     v_html = (
         f'<span style="color:{v_color}; font-size: 0.9em;">'
-        f"Cramer's V: {v_c:.4f} - Type: {cramer_v_type(v_c)}</span>"
+        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+        f' &nbsp;-&nbsp; '
+        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+        f'</span>'
     )
 
     if categorical:
@@ -97,7 +112,8 @@ def build_feature_html(feature, x, y_clean, splits, option, special=None, consid
 
     return f"""
     <section class="feature">
-        <h2>{escape(str(feature))} <span class="iv">IV: {iv_total:.4f}</span> {p_html}</h2>
+        <h2>{escape(str(feature))}</h2>
+        <p class="meta">{iv_html} {p_html}</p>
         <p class="cramers">{v_html}</p>
         {option_html}
         {splits_html}
@@ -124,8 +140,8 @@ def build_report(df, features_config, label_name, special=None, min_bin_size=0.0
         try:
             cfg_type = cfg.get('type')
             series = X_train[feature]
-            part = cfg.get('part', 'considerSPECIAL')
-            consider_special = part in ("considerSPECIAL", "considerMISSING")
+            part = cfg.get('part', 'consider SPECIAL')
+            consider_special = part.startswith("consider")
             x_full = X_train[feature]
             if cfg_type == 'categorical' or (cfg_type is None and is_categorical(series)):
                 categories = [str(c) for c in cfg.get('splits', [])]
@@ -186,10 +202,14 @@ def build_report(df, features_config, label_name, special=None, min_bin_size=0.0
 <style>
 body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
 h2 {{ margin-top: 0; }}
+.feature h2 {{ font-size: 28px; }}
 h1.title {{ text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px; }}
 h3 {{ margin-top: 24px; }}
 .plot {{ display: block; max-width: 40%; height: auto; }}
-.iv {{ color: #007bff; font-weight: normal; font-size: 0.8em; }}
+.meta {{ margin: 4px 0; font-size: 0.9em; }}
+.iv {{ color: #555; font-weight: normal; font-size: 0.9em; }}
+.iv-label {{ color: #555; font-weight: normal; }}
+.stat-label {{ font-weight: normal; }}
 .cramers {{ margin: 4px 0; font-size: 0.9em; }}
 .option {{ color: #555; }}
 .splits {{ color: #777; font-size: 0.9em; }}

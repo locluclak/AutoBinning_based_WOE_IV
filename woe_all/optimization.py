@@ -65,7 +65,7 @@ def calculate_feature(feature, X_train, y, considerSPECIAL=False):
     p_bar = np.mean(y_clean)
     min_event_rate_diff = 2 * p_bar * (1 - p_bar) * np.tanh(MIN_DIFF_WOE / 2)
 
-    part = "considerSPECIAL" if considerSPECIAL else "removeSPECIAL"
+    part = "consider SPECIAL" if considerSPECIAL else "remove SPECIAL"
 
     results = {}
 
@@ -114,7 +114,7 @@ def calculate_categorical_feature(feature, X_train, y, considerSPECIAL=False):
 
     groups = [str(c) for c in pd.unique(display_x.dropna())]
 
-    part = "considerSPECIAL" if considerSPECIAL else "removeSPECIAL"
+    part = "consider SPECIAL" if considerSPECIAL else "remove SPECIAL"
 
     results = {}
     option_name = "Groups as bins"

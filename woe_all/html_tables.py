@@ -56,29 +56,44 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
 
         styled_html = styler.to_html()
 
-        title_parts = [result["option"]]
+        title = result["option"]
+
+        meta_parts = []
         if iv_total is not None:
             iv_total_text = formats.get("IV_total", "{:.2f}").format(iv_total)
-            title_parts.append(f"<span class=\"iv-total\">IV total: {iv_total_text}</span>")
+            iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+            meta_parts.append(
+                f'<span class="iv-total">'
+                f'<span class="iv-label">IV total:</span> '
+                f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
+                f'</span>'
+            )
         if stats is not None:
             p_color = "#16a34a" if stats[0] <= 0.05 else "#dc2626"
-            title_parts.append(
-                f"<span style=\"color:{p_color}\">p-value: {format_p_value(stats[0])}</span>"
+            meta_parts.append(
+                f'<span class="p-value" style="color:{p_color}">'
+                f'<span class="stat-label">p-value:</span> '
+                f'<b>{format_p_value(stats[0])}</b>'
+                f'</span>'
             )
-        title = " ".join(title_parts)
+        meta_html = " ".join(meta_parts)
 
         stats_html = ""
         if stats is not None:
             v_c = stats[1]
             v_color = cramer_v_color(v_c)
             stats_html = (
-                f"<div style=\"margin-bottom: 2px; color:{v_color}; font-size: 0.9em;\">"
-                f"Cramer's V: {v_c:.4f} - Type: {cramer_v_type(v_c)}</div>"
+                f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
+                f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+                f' &nbsp;-&nbsp; '
+                f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+                f'</div>'
             )
 
         block = f"""
         <div class="woe-block">
-            <h4 style="margin-bottom: 8px;">{title}</h4>
+            <h4 style="margin-bottom: 4px;">{title}</h4>
+            {meta_html}
             {stats_html}
             {styled_html}
         </div>
