@@ -119,18 +119,33 @@ def build_summary_html(meta):
     total = len(meta)
     continuous = [m for m in meta if m['type'] == 'continuous']
     categorical = [m for m in meta if m['type'] == 'categorical']
+    low_iv = [m for m in meta if m['iv_total'] <= 0.2]
     high_iv = [m for m in meta if m['iv_total'] > 0.2]
 
-    def names(items):
-        return ", ".join(escape(str(m['feature'])) for m in items)
+    def cells(items):
+        return "<br>".join(escape(str(m['feature'])) for m in items)
 
-    def details(title, items, default_open=False):
-        return (
-            f"<details{' open' if default_open else ''}>"
-            f"<summary>{escape(title)}</summary>"
-            f"<p>{names(items)}</p>"
-            f"</details>"
+    def summary_table(headers, columns):
+        header_cells = "".join(
+            f"<th>{escape(header)} ({len(col)})</th>"
+            for header, col in zip(headers, columns)
         )
+        body_cells = "".join(f"<td>{cells(col)}</td>" for col in columns)
+        return f"""
+        <table class="summary-table">
+            <thead><tr>{header_cells}</tr></thead>
+            <tbody><tr>{body_cells}</tr></tbody>
+        </table>
+        """
+
+    table_types = summary_table(
+        ["Continuous features", "Categorical features"], [continuous, categorical])
+    vtype_groups = [[m for m in meta if m['v_type'] == vt]
+                    for vt in ("Strong", "Good", "Medium", "Weak")]
+    table_vtypes = summary_table(
+        ["Strong", "Good", "Medium", "Weak"], vtype_groups)
+    table_iv = summary_table(
+        ["IV total \u2264 0.2", "IV total > 0.2"], [low_iv, high_iv])
 
     metrics = (
         f'<div class="metric"><div class="value">{total}</div><div class="label">Total features</div></div>'
@@ -139,18 +154,11 @@ def build_summary_html(meta):
         f'<div class="metric"><div class="value">{len(high_iv)}</div><div class="label">IV total &gt; 0.2</div></div>'
     )
 
-    lists = [details(f"Continuous features ({len(continuous)})", continuous, default_open=True),
-             details(f"Categorical features ({len(categorical)})", categorical, default_open=True)]
-    for vt in ("Strong", "Good", "Medium", "Weak"):
-        items = [m for m in meta if m['v_type'] == vt]
-        lists.append(details(f"Cramer's V type {vt} ({len(items)})", items))
-    lists.append(details(f"Features with IV total > 0.2 ({len(high_iv)})", high_iv))
-
     return f"""
     <section class="summary">
         <h2>Summary</h2>
         <div class="summary-metrics">{metrics}</div>
-        <div class="summary-lists">{''.join(lists)}</div>
+        <div class="summary-tables">{table_types}{table_vtypes}{table_iv}</div>
     </section>
     """
 
@@ -329,10 +337,10 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .metric {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 18px; text-align: center; min-width: 120px; }}
 .metric .value {{ font-size: 26px; font-weight: bold; color: #111; }}
 .metric .label {{ color: #555; font-size: 0.85em; }}
-.summary-lists {{ display: flex; flex-direction: column; gap: 6px; }}
-.summary-lists details {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px 12px; }}
-.summary-lists summary {{ font-weight: bold; cursor: pointer; color: #333; }}
-.summary-lists details p {{ margin: 8px 0 2px; color: #222; }}
+.summary-tables {{ display: flex; flex-direction: column; gap: 12px; }}
+.summary-table {{ border-collapse: collapse; width: 100%; background: #f8f9fa; border: 1px solid #dee2e6; }}
+.summary-table th {{ border: 1px solid #dee2e6; padding: 8px 12px; background: #e9ecef; font-weight: bold; color: #333; }}
+.summary-table td {{ border: 1px solid #dee2e6; padding: 8px 12px; vertical-align: top; white-space: normal; line-height: 1.5; }}
 </style>
 </head>
 <body>

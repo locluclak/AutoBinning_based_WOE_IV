@@ -124,8 +124,8 @@ def build_transformed(df, features_config, label_name, special=None, min_bin_siz
             continue
         try:
             x = X_train[feature]
-            part = cfg.get('part', 'considerSPECIAL')
-            consider_special = part in ("considerSPECIAL", "considerMISSING")
+            part = cfg.get('part', 'consider SPECIAL')
+            consider_special = part.startswith("consider")
             cfg_type = cfg.get('type')
             if cfg_type == 'categorical' or (cfg_type is None and is_categorical(x)):
                 categories = [str(c) for c in cfg.get('splits', [])]
