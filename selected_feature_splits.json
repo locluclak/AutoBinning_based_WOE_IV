@@ -1,49 +1,196 @@
 {
     "config": {
-        "input_file": "export_ftr_loan_1.csv",
-        "output_file": "woe_all_features2.html",
-        "label_name": "LABEL_IS_CASA_50M_ACTUAL_BAL_LCL",
+        "input_file": "segmentation1.csv",
+        "output_file": "woe_categorical_test.html",
+        "label_name": "IS_CASA_50M_ACTUAL_BAL_LCL",
         "min_bin": 4,
         "max_bin": 10,
-        "specialvalue": 0,
+        "special": [
+            "MISSING",
+            0,
+            "SME"
+        ],
         "min_diff_woe": 0.01,
+        "min_bin_size": 0.05,
+        "max_bin_size": 0.5,
         "ignore_column": [
-            "LABEL_IS_CASA_50M_AVG_AMT_LCL",
-            "LABEL_IS_SAVING_NEW_OPEN",
-            "LABEL_IS_SAVING_100M_NEW_OPEN"
+            "SNAPSHOT",
+            "CUSTOMER_CDE",
+            "IS_SAVING_NEW_OPEN",
+            "IS_SAVING_100M_NEW_OPEN",
+            "IS_CASA_50M_AVG_AMT_LCL"
         ]
     },
     "features": {
-        "LOAN_AMT": {
-            "option": "2. Monotonic",
+        "SEGMENTATION": {
+            "option": "Groups as bins",
+            "part": "remove SPECIAL",
+            "type": "categorical",
             "splits": [
-                606520896,
-                2171604736,
-                3029500032,
-                7000046848,
-                10321574400,
-                15002135552,
-                27080972288
+                "MSME",
+                "NONE",
+                "DNL",
+                "USME"
             ]
         },
-        "LOAN_AMT_ACTIVE": {
+        "TOI_DP": {
             "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
             "splits": [
-                499246304,
-                2014867584,
-                5096750080,
-                10004852736,
-                15505036800
+                32698.0400390625,
+                63821.130859375,
+                110866.7109375,
+                278061.0625,
+                615501.15625,
+                1139992.375,
+                1828560.5,
+                5364714.25,
+                15595853
             ]
         },
-        "DAY_PAST_LAST_LOAN": {
+        "TOI_LN": {
             "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
             "splits": [
-                10.5,
-                25.5,
-                40.5,
-                191.5,
-                326.5
+                14254681,
+                43098374,
+                109975172
+            ]
+        },
+        "TOI_FEE": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                895427.5,
+                1043334,
+                1406750,
+                2209020,
+                3622106,
+                12301027.5
+            ]
+        },
+        "TOI_FX": {
+            "option": "2. Monotonic",
+            "part": "remove SPECIAL",
+            "type": "continuous",
+            "splits": [
+                150426.78125,
+                857262.5,
+                3670133.5,
+                7340795.25,
+                22045455,
+                31325891,
+                56548342,
+                180401568,
+                467085088
+            ]
+        },
+        "TOI_TOTAL": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                158232.09375,
+                928261.46875,
+                1146470.0625,
+                1533504.25,
+                2323382.875,
+                2984147,
+                4019723,
+                6693147,
+                321617200
+            ]
+        },
+        "ACTUAL_BAL_LCL_D0": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                1533959,
+                3313217,
+                7209136,
+                14886191,
+                30973753,
+                49209458,
+                79479544,
+                133960280,
+                318133248
+            ]
+        },
+        "AVG_AMT_LCL_D0": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                1731633.25,
+                5602332.75,
+                16665522,
+                30277129,
+                49977852,
+                75399148,
+                122473140,
+                185479400,
+                358035744
+            ]
+        },
+        "ACTUAL_BAL_LCL_CASA_D0": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                171340.796875,
+                1533833,
+                7209136,
+                21362364,
+                48394254,
+                79479544,
+                143404536,
+                416100592,
+                1038714976
+            ]
+        },
+        "AVG_AMT_LCL_CASA_D0": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                132447.6640625,
+                1731441.75,
+                5603140.5,
+                16665522,
+                30699649,
+                49981348,
+                75397576,
+                185479400,
+                528203072
+            ]
+        },
+        "ACTUAL_BAL_LCL_SAVING_D0": {
+            "option": "2. Monotonic",
+            "part": "remove SPECIAL",
+            "type": "continuous",
+            "splits": [
+                108144.5,
+                1049293,
+                1314363.5,
+                5912594,
+                116189568,
+                2763283712
+            ]
+        },
+        "AVG_AMT_LCL_SAVING_D0": {
+            "option": "2. Monotonic",
+            "part": "remove SPECIAL",
+            "type": "continuous",
+            "splits": [
+                107824.203125,
+                1051524.4375,
+                2432653.75,
+                59933614,
+                1239051264
             ]
         }
     }
