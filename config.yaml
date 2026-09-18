@@ -9,23 +9,23 @@
 # max_bin_size: 0.50
 # ignore_column: [LABEL_IS_CASA_50M_AVG_AMT_LCL,LABEL_IS_SAVING_NEW_OPEN,LABEL_IS_SAVING_100M_NEW_OPEN]
 
-input_file: "segmentation1.csv"
-output_file: "woe_categorical_test.html"
+# input_file: "segmentation1.csv"
+# output_file: "woe_categorical_test.html"
+# label_name: "IS_CASA_50M_ACTUAL_BAL_LCL"
+# min_bin: 4
+# max_bin: 10
+# special: ['MISSING', 0, 'SME']
+# min_diff_woe: 0.01
+# min_bin_size: 0.05
+# max_bin_size: 0.50
+# ignore_column: ["SNAPSHOT", "CUSTOMER_CDE", "IS_SAVING_NEW_OPEN", "IS_SAVING_100M_NEW_OPEN", "IS_CASA_50M_AVG_AMT_LCL"]
+
+
+input_file: "KHDN_CASA_SAVING_S9(1).csv"
+output_file: "KHDN_CASA_SAVING_S9.html"
 label_name: "IS_CASA_50M_ACTUAL_BAL_LCL"
 min_bin: 4
 max_bin: 10
-special: ['MISSING', 0, 'SME']
+special: ['MISSING',]
 min_diff_woe: 0.01
-min_bin_size: 0.05
-max_bin_size: 0.50
-ignore_column: ["SNAPSHOT", "CUSTOMER_CDE", "IS_SAVING_NEW_OPEN", "IS_SAVING_100M_NEW_OPEN", "IS_CASA_50M_AVG_AMT_LCL"]
-
-
-# input_file: "DUCNA_EXPORT_DATA.csv"
-# output_file: "DUCNA_EXPORT_DATA.html"
-# label_name: "IS_CASA_50M_ACTUAL_BAL_LCL"
-# min_bin: 4
-# max_bin: 5
-# specialvalue: 0
-# min_diff_woe: 0.01
-# ignore_column: ["CUSTOMER_CDE","SNAPSHOT",IS_CASA_50M_AVG_AMT_LCL,IS_SAVING_NEW_OPEN,IS_SAVING_100M_NEW_OPEN,TOI_DP,"TOI_LN","TOI_FEE","TOI_FX","TOI_TOTAL","IS_ACTIVE_3M","ACTUAL_BAL_LCL_D0","ACTUAL_BAL_LCL_CASA_D0","ACTUAL_BAL_LCL_SAVING_D0"]
+ignore_column: ["CUSTOMER_CDE","SNAPSHOT",RPT_DT,IS_CASA_50M_AVG_AMT_LCL,IS_SAVING_NEW_OPEN,IS_SAVING_100M_NEW_OPEN,IS_CASA_100M_AVG_AMT_LCL,IS_ACTIVE_3M,]

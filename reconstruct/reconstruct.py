@@ -15,6 +15,7 @@ def woe_table_html(woe_df, v_c):
         "prob_n_obs": "{:.2%}",
         "pct_event": "{:.2%}",
         "pct_non_event": "{:.2%}",
+        "conversion_rate": "{:.2%}",
         "WOE": "{:.4f}",
         "IV_detail": "{:.4f}",
         "IV_total": "{:.4f}",

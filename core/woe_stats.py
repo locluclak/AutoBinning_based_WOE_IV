@@ -56,6 +56,9 @@ def _finalize_woe(grouped, total_obs, total_events, total_non_events):
     grouped['pct_event'] = grouped['n_events'] / total_events if total_events > 0 else 0
     grouped['pct_non_event'] = grouped['n_non_events'] / total_non_events if total_non_events > 0 else 0
 
+    n_obs = grouped['n_events'] + grouped['n_non_events']
+    grouped['conversion_rate'] = np.where(n_obs > 0, grouped['n_events'] / n_obs, np.nan)
+
     eps = 1e-6
     pct_event_adj = np.where(grouped['pct_event'] == 0, eps, grouped['pct_event'])
     pct_non_event_adj = np.where(grouped['pct_non_event'] == 0, eps, grouped['pct_non_event'])
@@ -65,7 +68,8 @@ def _finalize_woe(grouped, total_obs, total_events, total_non_events):
     grouped['IV_total'] = grouped['IV_detail'].sum()
     grouped['Bin'] = grouped['bin'].astype(str)
 
-    return grouped[['Bin', 'prob_n_obs', 'pct_event', 'pct_non_event', 'WOE', 'IV_detail', 'IV_total']].copy()
+    return grouped[['Bin', 'prob_n_obs', 'pct_event', 'pct_non_event', 'conversion_rate',
+                    'WOE', 'IV_detail', 'IV_total']].copy()
 
 
 def create_woe_df(x, y, splits, missing_first=False, specialvalue=None, special=None):
@@ -356,13 +360,13 @@ def format_p_value(p_value):
 
 
 def add_score_column(woe_df, v_c):
-    """Add 'score' column: score = sign(WOE) * V_c * IV_bin / IV_total."""
+    """Add 'score' column: score = sign(WOE) * V_c * (IV_bin / IV_total) * 100."""
     df = woe_df.copy()
     iv_total = df["IV_total"].iloc[0]
     if iv_total == 0:
         df["score"] = 0.0
     else:
-        df["score"] = np.sign(df["WOE"]) * v_c * df["IV_detail"] / iv_total
+        df["score"] = np.sign(df["WOE"]) * v_c * df["IV_detail"] / iv_total * 100
     return df
 
 

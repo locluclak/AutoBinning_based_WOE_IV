@@ -17,6 +17,7 @@ MISSING_FORMATS = {
     "prob_n_obs": "{:.2%}",
     "pct_event": "{:.2%}",
     "pct_non_event": "{:.2%}",
+    "conversion_rate": "{:.2%}",
     "WOE": "{:.2f}",
     "IV_detail": "{:.2f}",
     "IV_total": "{:.2f}",
@@ -119,39 +120,51 @@ def build_summary_html(meta):
     total = len(meta)
     continuous = [m for m in meta if m['type'] == 'continuous']
     categorical = [m for m in meta if m['type'] == 'categorical']
-    low_iv = [m for m in meta if m['iv_total'] <= 0.2]
-    high_iv = [m for m in meta if m['iv_total'] > 0.2]
 
     def cells(items):
-        return "<br>".join(escape(str(m['feature'])) for m in items)
+        if not items:
+            return ""
+        return "<br>".join(escape(str(m['feature'])) + "," for m in items)
 
-    def summary_table(headers, columns):
+    def summary_table(summary, headers, columns):
         header_cells = "".join(
             f"<th>{escape(header)} ({len(col)})</th>"
             for header, col in zip(headers, columns)
         )
         body_cells = "".join(f"<td>{cells(col)}</td>" for col in columns)
         return f"""
-        <table class="summary-table">
-            <thead><tr>{header_cells}</tr></thead>
-            <tbody><tr>{body_cells}</tr></tbody>
-        </table>
+        <details>
+            <summary>{escape(summary)}</summary>
+            <table class="summary-table">
+                <thead><tr>{header_cells}</tr></thead>
+                <tbody><tr>{body_cells}</tr></tbody>
+            </table>
+        </details>
         """
 
     table_types = summary_table(
+        "Continuous vs Categorical",
         ["Continuous features", "Categorical features"], [continuous, categorical])
-    vtype_groups = [[m for m in meta if m['v_type'] == vt]
-                    for vt in ("Strong", "Good", "Medium", "Weak")]
-    table_vtypes = summary_table(
-        ["Strong", "Good", "Medium", "Weak"], vtype_groups)
-    table_iv = summary_table(
-        ["IV total \u2264 0.2", "IV total > 0.2"], [low_iv, high_iv])
+
+    vt_labels = ("Strong", "Good", "Medium", "Weak")
+    vtype_groups = [[m for m in meta if m['v_type'] == vt] for vt in vt_labels]
+    table_vtypes = summary_table("Cramer's V type", list(vt_labels), vtype_groups)
+
+    iv_headers = ["IV total \u2264 0.2", "0.2 < IV total \u2264 0.5", "0.5 < IV total \u2264 1", "IV total > 1"]
+    iv_groups = [
+        [m for m in meta if m['iv_total'] <= 0.2],
+        [m for m in meta if 0.2 < m['iv_total'] <= 0.5],
+        [m for m in meta if 0.5 < m['iv_total'] <= 1],
+        [m for m in meta if m['iv_total'] > 1],
+    ]
+    table_iv = summary_table("IV total", iv_headers, iv_groups)
 
     metrics = (
         f'<div class="metric"><div class="value">{total}</div><div class="label">Total features</div></div>'
-        f'<div class="metric"><div class="value">{len(continuous)}</div><div class="label">Continuous</div></div>'
-        f'<div class="metric"><div class="value">{len(categorical)}</div><div class="label">Categorical</div></div>'
-        f'<div class="metric"><div class="value">{len(high_iv)}</div><div class="label">IV total &gt; 0.2</div></div>'
+        f'<div class="metric"><div class="value">{sum(m.get("has_optimal", False) for m in meta)}</div>'
+        f'<div class="label">With optimal solution</div></div>'
+        f'<div class="metric"><div class="value">{sum(m.get("all_infeasible", False) for m in meta)}</div>'
+        f'<div class="label">All INFEASIBLE</div></div>'
     )
 
     return f"""
@@ -183,6 +196,10 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
     missing_html = build_missing_table_html(X_train[feature], y)
 
     ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
+
+    statuses = [r["model"].status for r in results.values()]
+    has_optimal = any(s in ("OPTIMAL", "OK") for s in statuses)
+    all_infeasible = bool(statuses) and all(s == "INFEASIBLE" for s in statuses)
 
     status_rows = []
     for idx, (part, part_results) in enumerate(parts.items()):
@@ -229,7 +246,8 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
     """
 
     return f"""
-    <section class="feature" data-feature="{escape(str(feature))}" data-type="{ftype}" data-iv="{iv_total:.4f}" data-vtype="{v_type}">
+    <section class="feature" data-feature="{escape(str(feature))}" data-type="{ftype}" data-iv="{iv_total:.4f}" data-vtype="{v_type}"
+        data-has-optimal="{str(has_optimal).lower()}" data-all-infeasible="{str(all_infeasible).lower()}">
         <h2>{escape(str(feature))}</h2>
         {status_html}
         <h3>WOE Trend &amp; Bin Count Comparison</h3>
@@ -256,11 +274,14 @@ def build_report(df:pd.DataFrame, label_name = "LABEL"):
         try:
             results, parts, option_names = compute_feature_results(feature, X_train, y)
             ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
+            statuses = [r["model"].status for r in results.values()]
             feature_meta.append({
                 "feature": feature,
                 "type": ftype,
                 "iv_total": iv_total,
                 "v_type": v_type,
+                "has_optimal": any(s in ("OPTIMAL", "OK") for s in statuses),
+                "all_infeasible": bool(statuses) and all(s == "INFEASIBLE" for s in statuses),
             })
             sections.append(build_feature_html(feature, X_train, y, results, parts, option_names))
             print(f"OK: {feature}")
@@ -338,7 +359,9 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .metric .value {{ font-size: 26px; font-weight: bold; color: #111; }}
 .metric .label {{ color: #555; font-size: 0.85em; }}
 .summary-tables {{ display: flex; flex-direction: column; gap: 12px; }}
-.summary-table {{ border-collapse: collapse; width: 100%; background: #f8f9fa; border: 1px solid #dee2e6; }}
+.summary-tables details {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px 12px; }}
+.summary-tables summary {{ font-weight: bold; cursor: pointer; color: #333; }}
+.summary-table {{ border-collapse: collapse; table-layout: fixed; width: 100%; background: #f8f9fa; border: 1px solid #dee2e6; }}
 .summary-table th {{ border: 1px solid #dee2e6; padding: 8px 12px; background: #e9ecef; font-weight: bold; color: #333; }}
 .summary-table td {{ border: 1px solid #dee2e6; padding: 8px 12px; vertical-align: top; white-space: normal; line-height: 1.5; }}
 </style>
@@ -352,6 +375,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 <h1 class="title">{escape(str(label_name))}</h1>
 <p>Features are processed independently. A feature that raises an exception is skipped.</p>
 {summary_html}
+{skipped_html}
 <div class="filter-bar">
     <span class="filter-group">
         <span class="filter-label">Type:</span>
@@ -370,19 +394,24 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
         <label><input type="checkbox" class="filter-vtype" value="Weak" checked>Weak</label>
     </span>
     <span class="filter-group">
+        <span class="filter-label">Status:</span>
+        <label><input type="checkbox" class="filter-status" value="optimal" checked>At least optimal</label>
+        <label><input type="checkbox" class="filter-status" value="infeasible" checked>All INFEASIBLE</label>
+    </span>
+    <span class="filter-group">
         <span class="filter-label">Feature names:</span>
         <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
     </span>
     <span id="filter-count">Showing all</span>
 </div>
 {''.join(sections)}
-{skipped_html}
 <script>
 const APP_CONFIG = {json.dumps(CONFIG, ensure_ascii=False)};
 {EXPORT_SCRIPT}
 function applyFilters() {{
     const types = Array.from(document.querySelectorAll('.filter-type:checked')).map(c => c.value);
     const vtypes = Array.from(document.querySelectorAll('.filter-vtype:checked')).map(c => c.value);
+    const statuses = Array.from(document.querySelectorAll('.filter-status:checked')).map(c => c.value);
     const minIv = parseFloat(document.getElementById('filter-iv').value) || 0;
     const rawNames = document.getElementById('filter-names').value;
     const names = rawNames.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
@@ -390,13 +419,20 @@ function applyFilters() {{
     let shown = 0;
     sections.forEach(s => {{
         const nameOk = names.length === 0 || names.includes(s.dataset.feature.toLowerCase());
-        const ok = nameOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv;
+        let statusOk = true;
+        if (statuses.length === 0) {{
+            statusOk = false;
+        }} else if (!(statuses.includes('optimal') && statuses.includes('infeasible'))) {{
+            statusOk = (statuses.includes('optimal') && s.dataset.hasOptimal === 'true') ||
+                       (statuses.includes('infeasible') && s.dataset.allInfeasible === 'true');
+        }}
+        const ok = nameOk && statusOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv;
         s.style.display = ok ? '' : 'none';
         if (ok) shown++;
     }});
     document.getElementById('filter-count').textContent = `Showing ${{shown}} / ${{sections.length}}`;
 }}
-document.querySelectorAll('.filter-type, .filter-vtype').forEach(el => el.addEventListener('change', applyFilters));
+document.querySelectorAll('.filter-type, .filter-vtype, .filter-status').forEach(el => el.addEventListener('change', applyFilters));
 document.getElementById('filter-iv').addEventListener('input', applyFilters);
 document.getElementById('filter-names').addEventListener('input', applyFilters);
 applyFilters();

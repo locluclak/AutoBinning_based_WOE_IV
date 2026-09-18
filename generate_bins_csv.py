@@ -219,7 +219,7 @@ def process_feature(name, cfg, x, y, special_values, label_name):
         non_event_cnt = int(row["n_non_events"])
         n_obs = event_cnt + non_event_cnt
         contribution = n_obs / total_obs * 100 if total_obs else 0.0
-        conversion = event_cnt / n_obs if n_obs else 0.0
+        conversion = event_cnt / n_obs * 100 if n_obs else 0.0
         dist_event = event_cnt / total_events * 100 if total_events else 0.0
         dist_non_event = non_event_cnt / total_non_events * 100 if total_non_events else 0.0
         woe = float(row["WOE"])
