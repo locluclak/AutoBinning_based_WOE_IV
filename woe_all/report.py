@@ -5,9 +5,10 @@ import pandas as pd
 
 from core.config_loader import CONFIG, IGNORE_COLUMN
 from core.export_script import EXPORT_SCRIPT
-from core.woe_stats import (chi2_cramers, chi2_cramers_categorical, cramer_v_type,
+from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramers,
+                            chi2_cramers_categorical, cramer_v_color, cramer_v_type,
                             create_missing_woe_df, create_woe_df, create_woe_df_categorical,
-                            figure_to_base64, is_categorical)
+                            figure_to_base64, format_p_value, is_categorical)
 from .html_tables import display_woe_tables
 from .optimization import calculate_categorical_feature, calculate_feature
 from .plotting import plot_options
@@ -21,26 +22,48 @@ MISSING_FORMATS = {
     "WOE": "{:.2f}",
     "IV_detail": "{:.2f}",
     "IV_total": "{:.2f}",
+    "score": "{:.4f}",
 }
 
 
 def build_missing_table_html(x, y):
-    missing_woe_df = create_missing_woe_df(x, y)
+    labels = pd.Series(["Missing" if pd.isna(v) else "Non-Missing" for v in x],
+                       index=x.index, dtype=object)
+    p_value, v_c = chi2_contingency_test(labels, pd.Series(y, index=x.index))
+    missing_woe_df = add_score_column(create_missing_woe_df(x, y), v_c)
     iv_total = missing_woe_df["IV_total"].iloc[0] if "IV_total" in missing_woe_df.columns else None
     display_df = missing_woe_df.drop(columns=["IV_total"], errors="ignore")
     valid_formats = {k: v for k, v in MISSING_FORMATS.items() if k in display_df.columns}
     table_html = display_df.style.format(valid_formats).to_html()
+
+    meta_parts = []
     if iv_total is not None:
         iv_total_text = MISSING_FORMATS.get("IV_total", "{:.2f}").format(iv_total)
         iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
-        title = (
+        meta_parts.append(
             f'<span class="iv-total">'
             f'<span class="iv-label">IV total:</span> '
             f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
             f'</span>'
         )
-    else:
-        title = ""
+    p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
+    meta_parts.append(
+        f'<span class="p-value" style="color:{p_color}">'
+        f'<span class="stat-label">p-value:</span> '
+        f'<b>{format_p_value(p_value)}</b>'
+        f'</span>'
+    )
+    title = " ".join(meta_parts)
+
+    v_color = cramer_v_color(v_c)
+    stats_html = (
+        f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
+        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+        f' &nbsp;-&nbsp; '
+        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+        f'</div>'
+    )
+
     return f"""
     <div class="woe-table-container">
         <div class="woe-row">
@@ -48,6 +71,7 @@ def build_missing_table_html(x, y):
             <div class="woe-row-columns">
                 <div class="woe-block">
                     <div style="margin-bottom: 6px;">{title}</div>
+                    {stats_html}
                     {table_html}
                 </div>
             </div>
