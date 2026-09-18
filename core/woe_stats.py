@@ -9,16 +9,26 @@ import pandas as pd
 
 
 def is_categorical(series):
-    """Detect whether a feature should be treated as categorical (no OptimalBinning)."""
-    if pd.api.types.is_categorical_dtype(series.dtype):
+    """Detect whether a feature should be treated as categorical (no OptimalBinning).
+
+    Detects from the dtype object directly instead of pd.api.types.* helpers,
+    which are not available/consistent across all pandas builds.
+    """
+    dtype = series.dtype
+    if isinstance(dtype, str):
+        return dtype in ("category", "string", "boolean", "str", "bool", "object")
+    dtype_str = getattr(dtype, "name", None) or str(dtype)
+    if dtype_str in ("category", "string", "boolean", "str"):
         return True
-    if pd.api.types.is_bool_dtype(series.dtype):
-        return True
-    if pd.api.types.is_object_dtype(series.dtype):
-        return True
-    if pd.api.types.is_string_dtype(series.dtype):
-        return True
-    return False
+    if getattr(dtype, "kind", "") in "iu":
+        try:
+            return int(series.nunique()) <= 3
+        except Exception:
+            return False
+    try:
+        return dtype == object or dtype == bool or dtype == np.bool_
+    except Exception:
+        return False
 
 
 def _normalize_special(special=None, specialvalue=None):
