@@ -42,10 +42,12 @@ CSV_COLUMNS = [
     "Dist_non_event",
     "ChiSquare",
     "P_value",
+    "Pvalue_remark",
     "CramerV",
     "CramerV_remark",
     "WOE",
-    "IV",
+    "IV_bin",
+    "IV_total of feature",
     "score",
 ]
 
@@ -241,10 +243,12 @@ def process_feature(name, cfg, x, y, special_values, label_name):
             "Dist_non_event": round6(dist_non_event),
             "ChiSquare": round6(chi2_stat),
             "P_value": round6(p_value),
+            "Pvalue_remark": "YES" if p_value <= 0.05 else "NO",
             "CramerV": round6(v_c),
             "CramerV_remark": remark,
             "WOE": round6(woe),
-            "IV": round6(iv),
+            "IV_bin": round6(iv),
+            "IV_total of feature": round6(iv_total),
             "score": round6(score),
         })
     return rows
