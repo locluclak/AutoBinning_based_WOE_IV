@@ -25,7 +25,7 @@ from scipy.stats import chi2_contingency
 
 from core.io_utils import load_data
 from core.woe_stats import (cramer_v_type, create_woe_df, create_woe_df_categorical,
-                            is_categorical)
+                            is_categorical, special_mask)
 
 CSV_COLUMNS = [
     "Label name",
@@ -194,7 +194,7 @@ def process_feature(name, cfg, x, y, special_values, label_name):
         x_use, y_use = x, y
         special_use = special_values
     else:
-        keep = ~x.isin(value_specials)
+        keep = ~special_mask(x, special=special_values)
         x_use, y_use = x[keep], y[keep]
         special_use = []
 

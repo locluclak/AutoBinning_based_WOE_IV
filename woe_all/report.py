@@ -346,13 +346,15 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .woe-table-container td, .woe-table-container th {{ white-space: nowrap; }}
 .skipped {{ margin-top: 40px; }}
 .feature-separator {{ border: 0; border-top: 3px solid #999; margin: 36px 0; }}
-.filter-bar {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px 16px; margin: 12px 0 24px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }}
+.filter-bar {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }}
 .filter-group {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }}
 .filter-label {{ font-weight: bold; color: #333; }}
 .filter-bar input[type="number"] {{ width: 90px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
 .filter-bar input[type="text"] {{ width: 300px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
 .filter-bar label {{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }}
 #filter-count {{ font-weight: bold; color: #007bff; margin-left: auto; }}
+.report-header {{ position: sticky; top: 0; background: #fff; padding: 8px 16px; border-bottom: 2px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; display: flex; flex-direction: column; gap: 6px; }}
+.export-btn {{ align-self: flex-start; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
 .summary {{ margin: 16px 0 24px; }}
 .summary-metrics {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }}
 .metric {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 18px; text-align: center; min-width: 120px; }}
@@ -367,43 +369,41 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 </style>
 </head>
 <body>
-<div style="position: sticky; top: 0; background: #fff; padding: 10px; border-bottom: 2px solid #ccc; z-index: 1000;">
-    <button onclick="exportConfig()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-        Export Selected Splits (JSON)
-    </button>
+<div class="report-header">
+    <button class="export-btn" onclick="exportConfig()">Export Selected Splits (JSON)</button>
+    <div class="filter-bar">
+        <span class="filter-group">
+            <span class="filter-label">Type:</span>
+            <label><input type="checkbox" class="filter-type" value="continuous" checked>Continuous</label>
+            <label><input type="checkbox" class="filter-type" value="categorical" checked>Categorical</label>
+        </span>
+        <span class="filter-group">
+            <span class="filter-label">Min IV total:</span>
+            <input type="number" id="filter-iv" min="0" step="0.05" value="0">
+        </span>
+        <span class="filter-group">
+            <span class="filter-label">Cramer's V type:</span>
+            <label><input type="checkbox" class="filter-vtype" value="Strong" checked>Strong</label>
+            <label><input type="checkbox" class="filter-vtype" value="Good" checked>Good</label>
+            <label><input type="checkbox" class="filter-vtype" value="Medium" checked>Medium</label>
+            <label><input type="checkbox" class="filter-vtype" value="Weak" checked>Weak</label>
+        </span>
+        <span class="filter-group">
+            <span class="filter-label">Status:</span>
+            <label><input type="checkbox" class="filter-status" value="optimal" checked>At least optimal</label>
+            <label><input type="checkbox" class="filter-status" value="infeasible" checked>All INFEASIBLE</label>
+        </span>
+        <span class="filter-group">
+            <span class="filter-label">Feature names:</span>
+            <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
+        </span>
+        <span id="filter-count">Showing all</span>
+    </div>
 </div>
 <h1 class="title">{escape(str(label_name))}</h1>
 <p>Features are processed independently. A feature that raises an exception is skipped.</p>
 {summary_html}
 {skipped_html}
-<div class="filter-bar">
-    <span class="filter-group">
-        <span class="filter-label">Type:</span>
-        <label><input type="checkbox" class="filter-type" value="continuous" checked>Continuous</label>
-        <label><input type="checkbox" class="filter-type" value="categorical" checked>Categorical</label>
-    </span>
-    <span class="filter-group">
-        <span class="filter-label">Min IV total:</span>
-        <input type="number" id="filter-iv" min="0" step="0.05" value="0">
-    </span>
-    <span class="filter-group">
-        <span class="filter-label">Cramer's V type:</span>
-        <label><input type="checkbox" class="filter-vtype" value="Strong" checked>Strong</label>
-        <label><input type="checkbox" class="filter-vtype" value="Good" checked>Good</label>
-        <label><input type="checkbox" class="filter-vtype" value="Medium" checked>Medium</label>
-        <label><input type="checkbox" class="filter-vtype" value="Weak" checked>Weak</label>
-    </span>
-    <span class="filter-group">
-        <span class="filter-label">Status:</span>
-        <label><input type="checkbox" class="filter-status" value="optimal" checked>At least optimal</label>
-        <label><input type="checkbox" class="filter-status" value="infeasible" checked>All INFEASIBLE</label>
-    </span>
-    <span class="filter-group">
-        <span class="filter-label">Feature names:</span>
-        <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
-    </span>
-    <span id="filter-count">Showing all</span>
-</div>
 {''.join(sections)}
 <script>
 const APP_CONFIG = {json.dumps(CONFIG, ensure_ascii=False)};
