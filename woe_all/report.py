@@ -205,12 +205,18 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
         results, parts, option_names = compute_feature_results(feature, X_train, y)
 
     plot_sections = []
-    for part, fig in plot_options(results, feature):
-        plot_sections.append(
-            f'<div class="plot-part">'
-            f'<div class="woe-group-title">{escape(part)}</div>'
+    for part, figures in plot_options(results, feature):
+        figure_html = "".join(
+            f'<div class="plot-figure" data-part="{escape(part)}" data-option="{escape(option_name)}">'
             f'<img class="plot" src="data:image/png;base64,{figure_to_base64(fig)}" '
-            f'alt="WOE plots for {escape(str(feature))}">'
+            f'alt="WOE plot for {escape(str(feature))} - {escape(option_name)}">'
+            f'</div>'
+            for option_name, fig in figures
+        )
+        plot_sections.append(
+            f'<div class="plot-part" data-part="{escape(part)}">'
+            f'<div class="woe-group-title">{escape(part)}</div>'
+            f'<div class="plot-row">{figure_html}</div>'
             f'</div>'
         )
     plot_html = "".join(plot_sections)
@@ -345,6 +351,8 @@ h2 {{ margin-top: 0; }}
 h3 {{ margin-top: 24px; }}
 .plot {{ display: block; max-width: 100%; height: auto; }}
 .plot-part {{ margin-bottom: 20px; }}
+.plot-row {{ display: flex; flex-wrap: wrap; gap: 15px; }}
+.plot-figure {{ flex: 1 1 0; min-width: 320px; }}
 .woe-group-title {{ margin: 8px 0 6px; font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; display: inline-block; }}
 table, th, td {{ border: 1px solid #ccc; border-collapse: collapse; }}
 th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
@@ -379,6 +387,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 #filter-count {{ font-weight: bold; color: #007bff; margin-left: auto; }}
 .report-header {{ position: sticky; top: 0; background: #fff; padding: 8px 16px; border-bottom: 2px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; display: flex; flex-direction: column; gap: 6px; }}
 .export-btn {{ align-self: flex-start; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
+.export-btns {{ display: flex; gap: 10px; }}
 .summary {{ margin: 16px 0 24px; }}
 .summary-metrics {{ display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }}
 .metric {{ background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 18px; text-align: center; min-width: 120px; }}
@@ -394,7 +403,10 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 </head>
 <body>
 <div class="report-header">
-    <button class="export-btn" onclick="exportConfig()">Export Selected Splits (JSON)</button>
+    <div class="export-btns">
+        <button class="export-btn" onclick="exportConfig()">Export Selected Splits (JSON)</button>
+        <button class="export-btn" onclick="exportSelectedHTML()">Export Selected Report (HTML)</button>
+    </div>
     <div class="filter-bar">
         <span class="filter-group">
             <span class="filter-label">Type:</span>

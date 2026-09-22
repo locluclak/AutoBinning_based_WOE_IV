@@ -1,5 +1,7 @@
 import numpy as np
 
+from html import escape
+
 from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
                             cramer_v_color, cramer_v_type, format_p_value)
 
@@ -92,7 +94,7 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
             )
 
         block = f"""
-        <div class="woe-block">
+        <div class="woe-block" data-part="{escape(result.get('part', ''))}" data-option="{escape(title)}">
             <h4 style="margin-bottom: 4px;">{title}</h4>
             {meta_html}
             {stats_html}
@@ -109,7 +111,7 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
     for part, option_names in parts.items():
         blocks = [html_blocks[list(results).index(n)] for n in option_names]
         part_rows.append(
-            f"<div class=\"woe-row\">"
+            f"<div class=\"woe-row\" data-part=\"{escape(part)}\">"
             f"<div class=\"woe-row-label\">{part}</div>"
             f"<div class=\"woe-row-columns\">"
             f"{''.join(blocks)}"

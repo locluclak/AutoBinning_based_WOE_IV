@@ -26,4 +26,49 @@ EXPORT_SCRIPT = """function exportConfig() {
     downloadAnchor.click();
     downloadAnchor.remove();
 }
+
+function exportSelectedHTML() {
+    const clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll('section.feature').forEach(section => {
+        const radio = section.querySelector('input[type="radio"]:checked');
+        if (!radio) {
+            section.remove();
+            return;
+        }
+        const selectedPart = radio.getAttribute('data-part');
+        const selectedOption = radio.getAttribute('data-option');
+        const statusTable = section.querySelector('table.status-table');
+        if (statusTable) statusTable.remove();
+        section.querySelectorAll('.plot-part').forEach(pp => {
+            if (pp.getAttribute('data-part') !== selectedPart) {
+                pp.remove();
+                return;
+            }
+            pp.querySelectorAll('.plot-figure').forEach(fig => {
+                if (fig.getAttribute('data-option') !== selectedOption) fig.remove();
+            });
+        });
+        section.querySelectorAll('.woe-row').forEach(row => {
+            const part = row.getAttribute('data-part');
+            if (part === null) return;
+            if (part !== selectedPart) {
+                row.remove();
+                return;
+            }
+            row.querySelectorAll('.woe-block').forEach(block => {
+                if (block.getAttribute('data-option') !== selectedOption) block.remove();
+            });
+        });
+        section.style.display = '';
+    });
+    const html = '<!DOCTYPE html>\\n' + clone.outerHTML;
+    const blob = new Blob([html], {type: 'text/html;charset=utf-8'});
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", URL.createObjectURL(blob));
+    downloadAnchor.setAttribute("download", "selected_report.html");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    URL.revokeObjectURL(downloadAnchor.href);
+}
 """
