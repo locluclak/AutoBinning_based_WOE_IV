@@ -3,13 +3,13 @@ import pandas as pd
 from optbinning import OptimalBinning
 
 from core.config_loader import (MAX_BIN, MAX_BIN_SIZE, MIN_BIN, MIN_BIN_SIZE, MIN_DIFF_WOE, SPECIAL)
-from core.woe_stats import special_mask
+from core.woe_stats import create_woe_df, special_mask
 
 
 OPTIONS = {
-    "1. Free optimization": "auto",
+    "1. Free optimization": None,
     "2. Monotonic": "auto_asc_desc",
-    "3. U-shape / heuristic": "auto_heuristic",
+    "3. U-shape / peak-valley": "auto_peak_valley",
 }
 
 
@@ -26,6 +26,53 @@ class _CategoricalModel:
         self.status = "OK"
         self.splits = list(groups)
         self.binning_table = None
+
+
+def _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend):
+    return OptimalBinning(name=name,
+                          dtype="numerical",
+                          min_n_bins=MIN_BIN,
+                          max_n_bins=MAX_BIN,
+                          min_bin_size=min_bin_size,
+                          max_bin_size=max_bin_size,
+                          min_event_rate_diff=min_event_rate_diff,
+                          monotonic_trend=trend)
+
+
+def _model_iv(optb, x, y, considerSPECIAL, special):
+    """Total IV of a fitted model, computed the same way the report does it.
+
+    Returns None when the model is not optimal.
+    """
+    if optb.status not in ("OPTIMAL", "OK"):
+        return None
+    missing_first = considerSPECIAL and optb.status == "OPTIMAL"
+    woe_df = create_woe_df(x, y, optb.splits, missing_first=missing_first, special=special)
+    return float(woe_df["IV_total"].iloc[0])
+
+
+def _fit_peak_valley(name, x, y, min_bin_size, max_bin_size, min_event_rate_diff,
+                     display_x, display_y, considerSPECIAL, special):
+    """U-shape trend: run strict 'peak' and 'valley' and keep the higher IV one.
+
+    If both are infeasible, return an infeasible model.
+    """
+    candidates = [
+        _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend)
+        for trend in ("peak", "valley")
+    ]
+    for optb in candidates:
+        optb.fit(x, y)
+
+    feasible = [optb for optb in candidates if optb.status in ("OPTIMAL", "OK")]
+    if not feasible:
+        return _InfeasibleModel()
+
+    def iv_key(optb):
+        iv = _model_iv(optb, display_x, display_y, considerSPECIAL, special)
+        return -np.inf if iv is None else iv
+
+    return max(feasible, key=iv_key)
 
 
 def calculate_feature(feature, X_train, y, considerSPECIAL=False):
@@ -72,8 +119,12 @@ def calculate_feature(feature, X_train, y, considerSPECIAL=False):
     for option_name, trend in OPTIONS.items():
         if infeasible:
             optb = _InfeasibleModel()
+        elif trend == "auto_peak_valley":
+            optb = _fit_peak_valley(feature, x, y_clean, min_bin_size, max_bin_size,
+                                    min_event_rate_diff, display_x, display_y,
+                                    considerSPECIAL, feature_special)
         else:
-            optb = OptimalBinning(name=feature, dtype="numerical", min_n_bins=MIN_BIN, max_n_bins=MAX_BIN, min_bin_size=min_bin_size, max_bin_size=max_bin_size, min_event_rate_diff=min_event_rate_diff, monotonic_trend=trend)
+            optb = _build_optb(feature, min_bin_size, max_bin_size, min_event_rate_diff, trend)
             optb.fit(x, y_clean)
 
         missing_first = considerSPECIAL and optb.status == "OPTIMAL"
