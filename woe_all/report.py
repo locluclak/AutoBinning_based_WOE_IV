@@ -438,7 +438,14 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .filter-bar input[type="number"] {{ width: 90px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
 .filter-bar input[type="text"] {{ width: 300px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }}
 .filter-bar label {{ display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }}
-#filter-count {{ font-weight: bold; color: #007bff; margin-left: auto; }}
+.filter-action {{ padding: 6px 12px; background: #fff; color: #007bff; border: 1px solid #007bff; border-radius: 4px; cursor: pointer; font-weight: bold; }}
+.filter-action:hover {{ background: #eaf4ff; }}
+.filter-action:disabled {{ color: #777; border-color: #bbb; background: #eee; cursor: not-allowed; }}
+.filter-counts {{ margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }}
+#filter-count {{ font-weight: bold; color: #007bff; }}
+#selected-count {{ font-weight: bold; color: #16a34a; }}
+.feature {{ scroll-margin-top: 130px; }}
+.feature.navigation-target {{ outline: 3px solid #007bff; outline-offset: 4px; transition: outline-color 0.3s ease; }}
 .report-header {{ position: sticky; top: 0; background: #fff; padding: 8px 16px; border-bottom: 2px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; display: flex; flex-direction: column; gap: 6px; }}
 .export-btn {{ align-self: flex-start; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
 .export-btns {{ display: flex; gap: 10px; }}
@@ -487,7 +494,11 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
             <span class="filter-label">Feature names:</span>
             <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
         </span>
-        <span id="filter-count">Showing all</span>
+        <button type="button" id="next-unselected" class="filter-action">Next unselected feature</button>
+        <span class="filter-counts" aria-live="polite">
+            <span id="filter-count">Showing all</span>
+            <span id="selected-count">Selected features 0 / 0</span>
+        </span>
     </div>
 </div>
 <h1 class="title">{escape(str(label_name))}</h1>
@@ -521,11 +532,89 @@ function applyFilters() {{
         if (ok) shown++;
     }});
     document.getElementById('filter-count').textContent = `Showing ${{shown}} / ${{sections.length}}`;
+    updateNextUnselectedButton();
 }}
+
+function visibleUnselectedFeatures() {{
+    return Array.from(document.querySelectorAll('section.feature')).filter(section =>
+        section.style.display !== 'none' &&
+        !section.querySelector('input[type="radio"]:checked')
+    );
+}}
+
+function updateNextUnselectedButton() {{
+    const button = document.getElementById('next-unselected');
+    const visibleUnselected = visibleUnselectedFeatures();
+    const hasAnyUnselected = Array.from(document.querySelectorAll('section.feature')).some(section =>
+        !section.querySelector('input[type="radio"]:checked')
+    );
+    button.disabled = visibleUnselected.length === 0;
+    button.title = visibleUnselected.length > 0
+        ? 'Jump to the next unselected feature shown by the current filters'
+        : (hasAnyUnselected
+            ? 'No unselected feature matches the current filters'
+            : 'All features have been selected');
+}}
+
+function updateSelectedCount() {{
+    const sections = Array.from(document.querySelectorAll('section.feature'));
+    const selected = sections.filter(section =>
+        section.querySelector('input[type="radio"]:checked')
+    ).length;
+    document.getElementById('selected-count').textContent =
+        `Selected features ${{selected}} / ${{sections.length}}`;
+    updateNextUnselectedButton();
+}}
+
+document.querySelectorAll('section.feature input[type="radio"]').forEach(radio => {{
+    let wasChecked = false;
+    const choiceLabel = radio.closest('label.option-choice');
+    const rememberCheckedState = () => {{
+        wasChecked = radio.checked;
+    }};
+
+    radio.addEventListener('pointerdown', rememberCheckedState);
+    if (choiceLabel) choiceLabel.addEventListener('pointerdown', rememberCheckedState);
+    radio.addEventListener('keydown', event => {{
+        if (event.key === ' ' || event.key === 'Enter') {{
+            rememberCheckedState();
+        }}
+    }});
+    radio.addEventListener('click', () => {{
+        if (wasChecked) {{
+            radio.checked = false;
+        }}
+        wasChecked = false;
+        updateSelectedCount();
+    }});
+    radio.addEventListener('change', updateSelectedCount);
+}});
+
+document.getElementById('next-unselected').addEventListener('click', () => {{
+    const header = document.querySelector('.report-header');
+    const headerBottom = header ? header.getBoundingClientRect().bottom : 0;
+    const unselected = visibleUnselectedFeatures();
+
+    if (unselected.length === 0) return;
+
+    const target = unselected.find(section =>
+        section.getBoundingClientRect().top > headerBottom + 8
+    ) || unselected[0];
+    const top = target.getBoundingClientRect().top + window.scrollY - headerBottom - 12;
+
+    document.querySelectorAll('section.feature.navigation-target').forEach(section =>
+        section.classList.remove('navigation-target')
+    );
+    target.classList.add('navigation-target');
+    window.scrollTo({{ top: Math.max(0, top), behavior: 'smooth' }});
+    window.setTimeout(() => target.classList.remove('navigation-target'), 1600);
+}});
+
 document.querySelectorAll('.filter-type, .filter-vtype, .filter-status').forEach(el => el.addEventListener('change', applyFilters));
 document.getElementById('filter-iv').addEventListener('input', applyFilters);
 document.getElementById('filter-names').addEventListener('input', applyFilters);
 applyFilters();
+updateSelectedCount();
 
 function roundingShift(precision) {{
     return Math.round(-Math.log10(precision));
