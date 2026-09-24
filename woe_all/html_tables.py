@@ -5,23 +5,90 @@ from html import escape
 from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
                             cramer_v_color, cramer_v_type, format_p_value)
 
+DEFAULT_FORMATS = {
+    "prob_n_obs": "{:.2%}",
+    "pct_event": "{:.2%}",
+    "pct_non_event": "{:.2%}",
+    "conversion_rate": "{:.2%}",
+    "WOE": "{:.2f}",
+    "IV_detail": "{:.2f}",
+    "IV_total": "{:.2f}",
+    "score": "{:.4f}",
+}
+
+
+def compute_result_stats(result):
+    """chi2 stats for an optimal result, else None.
+
+    Returns (p_value, cramers_v) matching the WOE table header logic.
+    """
+    if result["model"].status not in ("OPTIMAL", "OK"):
+        return None
+    if result.get("categorical"):
+        return chi2_cramers_categorical(result["x"], result["y"])
+    return chi2_cramers(result["x"], result["y"], result["splits"],
+                        special=result.get("special"))
+
+
+def compute_result_woe_df(result, create_woe_df_func):
+    """Build the WOE/IV table for a result (categorical-aware)."""
+    from core.woe_stats import create_woe_df_categorical
+
+    missing_first = result.get("missing_first", False)
+    if result.get("categorical"):
+        return create_woe_df_categorical(result["x"], result["y"], missing_first=missing_first)
+    return create_woe_df_func(result["x"], result["y"], result["splits"],
+                              missing_first=missing_first, special=result.get("special"))
+
+
+def option_meta_html(woe_df, stats=None, formats=None):
+    """IV total + p-value line with the same color/bold styling as the WOE blocks."""
+    if formats is None:
+        formats = DEFAULT_FORMATS
+
+    iv_total = woe_df["IV_total"].iloc[0] if "IV_total" in woe_df.columns else None
+
+    meta_parts = []
+    if iv_total is not None:
+        iv_total_text = formats.get("IV_total", "{:.2f}").format(iv_total)
+        iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+        meta_parts.append(
+            f'<span class="iv-total">'
+            f'<span class="iv-label">IV total:</span> '
+            f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
+            f'</span>'
+        )
+    if stats is not None:
+        p_color = "#16a34a" if stats[0] <= 0.05 else "#dc2626"
+        meta_parts.append(
+            f'<span class="p-value" style="color:{p_color}">'
+            f'<span class="stat-label">p-value:</span> '
+            f'<b>{format_p_value(stats[0])}</b>'
+            f'</span>'
+        )
+    return " ".join(meta_parts)
+
+
+def option_stats_html(stats=None):
+    """Cramer's V - Type line with the same styling as the WOE blocks."""
+    if stats is None:
+        return ""
+    v_c = stats[1]
+    v_color = cramer_v_color(v_c)
+    return (
+        f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
+        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+        f' &nbsp;-&nbsp; '
+        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+        f'</div>'
+    )
+
 
 def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, render: bool = True):
     """Generates and displays side-by-side formatted HTML WOE tables from results.
     """
-    from core.woe_stats import create_woe_df_categorical
-
     if formats is None:
-        formats = {
-            "prob_n_obs": "{:.2%}",
-            "pct_event": "{:.2%}",
-            "pct_non_event": "{:.2%}",
-            "conversion_rate": "{:.2%}",
-            "WOE": "{:.2f}",
-            "IV_detail": "{:.2f}",
-            "IV_total": "{:.2f}",
-            "score": "{:.4f}",
-        }
+        formats = DEFAULT_FORMATS
 
     print("WOE TABLES")
     woe_tables = {}
@@ -29,21 +96,14 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
 
     for idx, (option_name, result) in enumerate(results.items()):
         splits = result["splits"]
-        missing_first = result.get("missing_first", False)
-        special = result.get("special")
-        if result.get("categorical"):
-            woe_df = create_woe_df_categorical(result["x"], result["y"], missing_first=missing_first)
-        else:
-            woe_df = create_woe_df_func(result["x"], result["y"], splits, missing_first=missing_first, special=special)
+
+        woe_df = compute_result_woe_df(result, create_woe_df_func)
 
         is_optimal = result["model"].status in ("OPTIMAL", "OK")
 
         stats = None
         if is_optimal:
-            if result.get("categorical"):
-                stats = chi2_cramers_categorical(result["x"], result["y"])
-            else:
-                stats = chi2_cramers(result["x"], result["y"], splits, special=special)
+            stats = compute_result_stats(result)
             woe_df = add_score_column(woe_df, stats[1])
 
         woe_tables[option_name] = woe_df
@@ -61,37 +121,8 @@ def display_woe_tables(results: dict, create_woe_df_func, formats: dict = None, 
 
         title = result["option"]
 
-        meta_parts = []
-        if iv_total is not None:
-            iv_total_text = formats.get("IV_total", "{:.2f}").format(iv_total)
-            iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
-            meta_parts.append(
-                f'<span class="iv-total">'
-                f'<span class="iv-label">IV total:</span> '
-                f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
-                f'</span>'
-            )
-        if stats is not None:
-            p_color = "#16a34a" if stats[0] <= 0.05 else "#dc2626"
-            meta_parts.append(
-                f'<span class="p-value" style="color:{p_color}">'
-                f'<span class="stat-label">p-value:</span> '
-                f'<b>{format_p_value(stats[0])}</b>'
-                f'</span>'
-            )
-        meta_html = " ".join(meta_parts)
-
-        stats_html = ""
-        if stats is not None:
-            v_c = stats[1]
-            v_color = cramer_v_color(v_c)
-            stats_html = (
-                f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
-                f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
-                f' &nbsp;-&nbsp; '
-                f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
-                f'</div>'
-            )
+        meta_html = option_meta_html(woe_df, stats, formats)
+        stats_html = option_stats_html(stats)
 
         block = f"""
         <div class="woe-block" data-part="{escape(result.get('part', ''))}" data-option="{escape(title)}">

@@ -9,7 +9,8 @@ from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramer
                             chi2_cramers_categorical, cramer_v_color, cramer_v_type,
                             create_missing_woe_df, create_woe_df, create_woe_df_categorical,
                             figure_to_base64, format_p_value, is_categorical)
-from .html_tables import display_woe_tables
+from .html_tables import (compute_result_stats, compute_result_woe_df, display_woe_tables,
+                          option_meta_html, option_stats_html)
 from .optimization import calculate_categorical_feature, calculate_feature
 from .plotting import plot_options
 
@@ -244,6 +245,12 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
                 splits = list(map(float, splits))
             ftype = "categorical" if result.get('categorical') else "continuous"
             status = result['model'].status
+
+            woe_df = compute_result_woe_df(result, create_woe_df)
+            stats = compute_result_stats(result)
+            meta_html = option_meta_html(woe_df, stats)
+            stats_html = option_stats_html(stats)
+
             option_cells.append(
                 f"<td>"
                 f"<label class=\"option-choice\">"
@@ -253,6 +260,7 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
                 f"data-type=\"{ftype}\" "
                 f"data-splits=\"{escape(json.dumps(splits))}\" "
                 f"data-status=\"{escape(str(status))}\">{escape(option_name)}</label>"
+                f"<div class=\"option-metrics\">{meta_html}{stats_html}</div>"
                 f"<div class=\"option-status {escape(str(status).lower())}\">Status: {escape(str(status))}</div>"
                 f"<div class=\"option-splits\">Splits: {escape(str(splits))}</div>"
                 f"</td>"
@@ -362,6 +370,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table .part-label {{ background: #e9ecef; font-weight: bold; width: 180px; }}
 .status-table .option-choice {{ display: flex; align-items: center; gap: 6px; }}
 .status-table .option-status {{ color: #555; font-size: 0.9em; margin-top: 4px; font-weight: bold; }}
+.status-table .option-metrics {{ color: #555; font-size: 0.9em; margin-top: 4px; }}
 .status-table .option-status.optimal {{ color: #16a34a; }}
 .status-table .option-status.infeasible {{ color: #dc2626; }}
 .status-table .option-splits {{ color: #777; font-size: 0.85em; }}
