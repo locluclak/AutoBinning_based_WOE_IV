@@ -7,12 +7,27 @@ EXPORT_SCRIPT = """function exportConfig() {
         const part = radio.getAttribute('data-part');
         const ftype = radio.getAttribute('data-type');
         const splitsData = JSON.parse(radio.getAttribute('data-splits'));
-        selectedConfig[featureName] = {
+        let splits = splitsData;
+        let note = null;
+        const roundingRow = radio.closest('td').querySelector('.option-splits');
+        if (roundingRow && roundingRow.getAttribute('data-rounded') === 'true') {
+            const direction = roundingRow.querySelector('.rounding-direction').value;
+            const precision = parseFloat(roundingRow.querySelector('.rounding-precision').value);
+            const rounded = splitsData.map(v => roundSplit(Number(v), direction, precision));
+            const modified = rounded.some((v, i) => v !== Number(splitsData[i]));
+            if (modified) {
+                splits = rounded;
+                note = 'Splits have been modified by rounding';
+            }
+        }
+        const feature = {
             option: selectedOption,
             part: part,
             type: ftype,
-            splits: splitsData
+            splits: splits
         };
+        if (note) feature.note = note;
+        selectedConfig[featureName] = feature;
     });
     const output = {
         config: APP_CONFIG,
