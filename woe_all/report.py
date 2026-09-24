@@ -26,6 +26,22 @@ MISSING_FORMATS = {
     "score": "{:.4f}",
 }
 
+PRECISION_OPTIONS = [
+    ("0.001", "0.001"),
+    ("0.01", "0.01"),
+    ("0.1", "0.1"),
+    ("1", "1"),
+    ("10", "10"),
+    ("100", "100"),
+    ("1000", "1K"),
+    ("10000", "10K"),
+    ("100000", "100K"),
+    ("1000000", "1M"),
+    ("10000000", "10M"),
+    ("100000000", "100M"),
+    ("1000000000", "1B"),
+]
+
 
 def build_missing_table_html(x, y):
     labels = pd.Series(["Missing" if pd.isna(v) else "Non-Missing" for v in x],
@@ -251,6 +267,32 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
             meta_html = option_meta_html(woe_df, stats)
             stats_html = option_stats_html(stats)
 
+            if not result.get('categorical'):
+                formatted_splits = "[" + ", ".join(f"{v:,}" for v in splits) + "]"
+                precision_options = "".join(
+                    f'<option value="{value}"{" selected" if value == "1" else ""}>{label}</option>'
+                    for value, label in PRECISION_OPTIONS
+                )
+                splits_html = (
+                    f'<div class="option-splits">'
+                    f'<span class="splits-label">Splits:</span> '
+                    f'<span class="splits-value">{escape(formatted_splits)}</span>'
+                    f'<span class="rounding-controls">'
+                    f'<span class="rounding-label">Round:</span>'
+                    f'<select class="rounding-direction" title="Rounding direction">'
+                    f'<option value="down">Down</option>'
+                    f'<option value="nearest" selected>Nearest</option>'
+                    f'<option value="up">Up</option>'
+                    f'</select>'
+                    f'<select class="rounding-precision" title="Rounding precision">'
+                    f'{precision_options}'
+                    f'</select>'
+                    f'</span>'
+                    f'</div>'
+                )
+            else:
+                splits_html = f'<div class="option-splits">Splits: {escape(str(splits))}</div>'
+
             option_cells.append(
                 f"<td>"
                 f"<label class=\"option-choice\">"
@@ -262,7 +304,7 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
                 f"data-status=\"{escape(str(status))}\">{escape(option_name)}</label>"
                 f"<div class=\"option-metrics\">{meta_html}{stats_html}</div>"
                 f"<div class=\"option-status {escape(str(status).lower())}\">Status: {escape(str(status))}</div>"
-                f"<div class=\"option-splits\">Splits: {escape(str(splits))}</div>"
+                f"{splits_html}"
                 f"</td>"
             )
         checked = " checked" if idx == 0 else ""
@@ -374,6 +416,9 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table .option-status.optimal {{ color: #16a34a; }}
 .status-table .option-status.infeasible {{ color: #dc2626; }}
 .status-table .option-splits {{ color: #777; font-size: 0.85em; }}
+.status-table .option-splits .rounding-controls {{ display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }}
+.status-table .option-splits .rounding-label {{ margin-right: 1px; }}
+.status-table .option-splits select {{ font-size: 0.9em; padding: 0 2px; height: 20px; line-height: 18px; border: 1px solid #ccc; border-radius: 3px; background: #fff; color: #555; }}
 .woe-table-container {{ display: flex; flex-direction: column; gap: 20px; }}
 .woe-row {{ display: flex; flex-direction: column; gap: 8px; }}
 .woe-row-label {{ font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; align-self: flex-start; }}
@@ -570,6 +615,130 @@ document.getElementById('filter-iv').addEventListener('input', applyFilters);
 document.getElementById('filter-names').addEventListener('input', applyFilters);
 applyFilters();
 updateSelectedCount();
+
+function roundingShift(precision) {{
+    return Math.round(-Math.log10(precision));
+}}
+
+function expandExponent(value) {{
+    let s = String(value);
+    const eIndex = s.search(/[eE]/);
+    if (eIndex === -1) return s;
+    const sign = s[0] === '-' ? '-' : '';
+    if (sign) s = s.slice(1);
+    const ePart = s.slice(eIndex + 1);
+    s = s.slice(0, eIndex);
+    const dot = s.indexOf('.');
+    const intPart = dot === -1 ? s : s.slice(0, dot);
+    const fracPart = dot === -1 ? '' : s.slice(dot + 1);
+    const exp = parseInt(ePart, 10);
+    let digits = intPart + fracPart;
+    let point = intPart.length + exp;
+    while (point <= 0) {{ digits = '0' + digits; point++; }}
+    while (point > digits.length) {{ digits += '0'; }}
+    let out;
+    if (point >= digits.length) {{
+        out = digits;
+    }} else if (point <= 0) {{
+        out = '0.' + '0'.repeat(-point) + digits;
+    }} else {{
+        out = digits.slice(0, point) + '.' + digits.slice(point);
+    }}
+    return sign + out;
+}}
+
+function decimalParts(value, shift) {{
+    const negative = value < 0;
+    let s = expandExponent(Math.abs(value));
+    const dot = s.indexOf('.');
+    const intPart = dot === -1 ? s : s.slice(0, dot);
+    const fracPart = dot === -1 ? '' : s.slice(dot + 1);
+    const allDigits = intPart + fracPart;
+    const pointPos = intPart.length + shift;
+    let integerStr, remainderStr;
+    if (pointPos <= 0) {{
+        integerStr = '0';
+        remainderStr = allDigits;
+    }} else if (pointPos >= allDigits.length) {{
+        integerStr = allDigits + '0'.repeat(pointPos - allDigits.length);
+        remainderStr = '';
+    }} else {{
+        integerStr = allDigits.slice(0, pointPos);
+        remainderStr = allDigits.slice(pointPos);
+    }}
+    integerStr = integerStr.replace(/^0+/, '') || '0';
+    return {{
+        integer: BigInt(integerStr),
+        negative,
+        remainder: remainderStr
+    }};
+}}
+
+function roundBigInt(parts, direction) {{
+    const {{ integer, negative, remainder }} = parts;
+    const mag = negative ? -integer : integer;
+    if (!remainder) return mag;
+    if (direction === 'down') {{
+        return negative ? mag - 1n : mag;
+    }}
+    if (direction === 'up') {{
+        return negative ? mag : mag + 1n;
+    }}
+    const firstDigit = remainder.charCodeAt(0) - 48;
+    const more = /[1-9]/.test(remainder.slice(1));
+    if (firstDigit > 5 || (firstDigit === 5 && more)) {{
+        return negative ? mag - 1n : mag + 1n;
+    }}
+    if (firstDigit === 5) {{
+        return negative ? mag : mag + 1n;
+    }}
+    return mag;
+}}
+
+function bigIntToDecimal(bi, shift) {{
+    const negative = bi < 0n;
+    let s = (negative ? -bi : bi).toString();
+    if (shift < 0) {{
+        s += '0'.repeat(-shift);
+        return (negative ? '-' : '') + s;
+    }}
+    if (shift === 0) return (negative ? '-' : '') + s;
+    while (s.length <= shift) s = '0' + s;
+    const point = s.length - shift;
+    return (negative ? '-' : '') + s.slice(0, point) + '.' + s.slice(point);
+}}
+
+function roundSplit(value, direction, precision) {{
+    const shift = roundingShift(precision);
+    const rounded = roundBigInt(decimalParts(value, shift), direction);
+    return Number(bigIntToDecimal(rounded, shift));
+}}
+
+function formatSplit(value, precision) {{
+    const decimals = Math.max(roundingShift(precision), 0);
+    return value.toLocaleString('en-US', {{
+        minimumFractionDigits: 0,
+        maximumFractionDigits: decimals
+    }});
+}}
+
+function updateSplitsRow(splitsDiv) {{
+    const radio = splitsDiv.closest('td').querySelector('input[type="radio"]');
+    const original = JSON.parse(radio.getAttribute('data-splits'));
+    const direction = splitsDiv.querySelector('.rounding-direction').value;
+    const precision = parseFloat(splitsDiv.querySelector('.rounding-precision').value);
+    splitsDiv.setAttribute('data-rounded', 'true');
+    const rounded = original.map(v => roundSplit(Number(v), direction, precision));
+    splitsDiv.querySelector('.splits-value').textContent =
+        '[' + rounded.map(v => formatSplit(v, precision)).join(', ') + ']';
+}}
+
+document.querySelectorAll('.rounding-direction, .rounding-precision').forEach(sel => {{
+    sel.addEventListener('change', function () {{
+        updateSplitsRow(this.closest('.option-splits'));
+    }});
+}});
+
 </script>
 </body>
 </html>
