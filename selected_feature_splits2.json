@@ -1,0 +1,86 @@
+{
+    "config": {
+        "input_file": "KHDN_CASA_SAVING_S9(1).csv",
+        "output_file": "KHDN_CASA_SAVING_S9.html",
+        "label_name": "IS_CASA_50M_ACTUAL_BAL_LCL",
+        "min_bin": 4,
+        "max_bin": 10,
+        "special": [
+            "MISSING"
+        ],
+        "min_diff_woe": 0.01,
+        "ignore_column": [
+            "CUSTOMER_CDE",
+            "SNAPSHOT",
+            "RPT_DT",
+            "IS_CASA_50M_AVG_AMT_LCL",
+            "IS_SAVING_NEW_OPEN",
+            "IS_SAVING_100M_NEW_OPEN",
+            "IS_CASA_100M_AVG_AMT_LCL",
+            "IS_ACTIVE_3M"
+        ]
+    },
+    "features": {
+        "TIME_AT_STB": {
+            "option": "2. Monotonic",
+            "part": "remove SPECIAL",
+            "type": "continuous",
+            "splits": [
+                379.5,
+                2229.5,
+                6217.5,
+                9512.5
+            ]
+        },
+        "TOI_DP": {
+            "option": "2. Monotonic",
+            "part": "remove SPECIAL",
+            "type": "continuous",
+            "splits": [
+                32700,
+                63800,
+                110900,
+                278100,
+                615500,
+                1140000,
+                1828600,
+                5364700,
+                15595900
+            ],
+            "note": "Splits have been modified by rounding"
+        },
+        "TOI_FEE": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                15000,
+                895000,
+                1043000,
+                1407000,
+                1740000,
+                2209000,
+                3622000,
+                6529000,
+                12530000
+            ],
+            "note": "Splits have been modified by rounding"
+        },
+        "TOI_TOTAL": {
+            "option": "2. Monotonic",
+            "part": "consider SPECIAL",
+            "type": "continuous",
+            "splits": [
+                158232.09375,
+                928261.46875,
+                1146470.0625,
+                1533504.25,
+                2323382.875,
+                2984147,
+                4019723,
+                6693147,
+                321617200
+            ]
+        }
+    }
+}

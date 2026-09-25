@@ -1,42 +1,69 @@
-# python reconstruct_report.py selected_feature_splits.json output.html
+# python reconstruct_report.py selected_feature_splits.json [selected2.json] [output.html]
+#
+# With one JSON, the report is a single stacked report.
+# With two JSONs, the report is split into a left/right comparison where the
+# same feature appears on the same row.
 
 import json
+import sys
 from pathlib import Path
 
 from core.io_utils import load_data
 from reconstruct.reconstruct import build_report
 
 
-def main(export_json: str, output_file: str = None):
-    with open(export_json, "r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    config = payload.get("config", {})
-    features_config = payload.get("features", {})
-
-    input_file = config.get("input_file", "")
-    label_name = config.get("label_name", "LABEL")
-    ignore_columns = config.get("ignore_column", [])
-    specialvalue = config.get("specialvalue")
+def normalize_special(config):
     special = config.get("special")
     if special is None:
-        special = [specialvalue] if specialvalue is not None else []
-    min_bin_size = config.get("min_bin_size", 0.05)
+        sv = config.get("specialvalue")
+        special = [sv] if sv is not None else []
+    return [s for s in special if s != ""]
 
-    output_file = output_file or config.get("output_file", "reconstructed_report.html")
+
+def parse_args(argv):
+    """Return (json_paths, output_file or None)."""
+    args = list(argv)
+    output_file = None
+    if len(args) >= 2 and args[-1].lower().endswith(".html"):
+        output_file = args.pop()
+    return args, output_file
+
+
+def main(export_jsons: list, output_file: str = None):
+    versions = []
+    first_config = {}
+    for path in export_jsons:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        config = payload.get("config", {})
+        if not first_config:
+            first_config = config
+        versions.append({
+            "label": Path(path).stem,
+            "config": payload.get("features", {}),
+            "special": normalize_special(config),
+        })
+
+    input_file = first_config.get("input_file", "")
+    label_name = first_config.get("label_name", "LABEL")
+    ignore_columns = first_config.get("ignore_column", [])
+    min_bin_size = first_config.get("min_bin_size", 0.05)
+
+    output_file = output_file or first_config.get("output_file", "reconstructed_report.html")
 
     df = load_data(input_file)
     if ignore_columns:
         df = df.drop(columns=[c for c in ignore_columns if c in df.columns])
 
-    html = build_report(df, features_config, label_name, special=special, min_bin_size=min_bin_size)
+    html = build_report(df, versions, label_name, min_bin_size=min_bin_size)
     Path(output_file).write_text(html, encoding="utf-8")
-    print(f"HTML report: {output_file}")
+    print(f"HTML report: {output_file} ({len(versions)} version(s))")
 
 
 if __name__ == "__main__":
-    import sys
-    args = sys.argv[1:]
-    export_json = args[0] if args else "selected_feature_splits.json"
-    output_file = args[1] if len(args) > 1 else None
-    main(export_json, output_file)
+    jsons, out = parse_args(sys.argv[1:])
+    if not jsons:
+        print("Usage: python reconstruct_report.py selected1.json [selected2.json] [output.html]",
+              file=sys.stderr)
+        sys.exit(1)
+    main(jsons, out)
