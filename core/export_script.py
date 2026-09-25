@@ -9,15 +9,24 @@ EXPORT_SCRIPT = """function exportConfig() {
         const splitsData = JSON.parse(radio.getAttribute('data-splits'));
         let splits = splitsData;
         let note = null;
-        const roundingRow = radio.closest('td').querySelector('.option-splits');
-        if (roundingRow && roundingRow.getAttribute('data-rounded') === 'true') {
-            const direction = roundingRow.querySelector('.rounding-direction').value;
-            const precision = parseFloat(roundingRow.querySelector('.rounding-precision').value);
-            const rounded = splitsData.map(v => roundSplit(Number(v), direction, precision));
-            const modified = rounded.some((v, i) => v !== Number(splitsData[i]));
-            if (modified) {
-                splits = rounded;
-                note = 'Splits have been modified by rounding';
+        const splitsRow = radio.closest('td').querySelector('.option-splits');
+        if (splitsRow && splitsRow.getAttribute('data-rounded-splits') !== null) {
+            const roundedRaw = splitsRow.getAttribute('data-rounded-splits');
+            const removedRaw = splitsRow.getAttribute('data-removed-indices');
+            const rounded = roundedRaw ? JSON.parse(roundedRaw) : splitsData;
+            const removed = removedRaw ? JSON.parse(removedRaw) : [];
+            const removedSet = new Set(removed);
+            const mergedSplits = rounded.filter((v, i) => !removedSet.has(i));
+            const roundedDiff = rounded.some((v, i) => v !== Number(splitsData[i]));
+            if (roundedDiff || removed.length) {
+                splits = mergedSplits;
+                if (roundedDiff && removed.length) {
+                    note = 'Splits have been modified by rounding and merging';
+                } else if (roundedDiff) {
+                    note = 'Splits have been modified by rounding';
+                } else {
+                    note = 'Splits have been modified by merging';
+                }
             }
         }
         const feature = {

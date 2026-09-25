@@ -268,15 +268,30 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
             stats_html = option_stats_html(stats)
 
             if not result.get('categorical'):
-                formatted_splits = "[" + ", ".join(f"{v:,}" for v in splits) + "]"
+                formatted_splits = "[" + "; ".join(f"{v:,}" for v in splits) + "]"
                 precision_options = "".join(
                     f'<option value="{value}"{" selected" if value == "1" else ""}>{label}</option>'
                     for value, label in PRECISION_OPTIONS
                 )
+                merge_chips = "".join(
+                    f'<span class="merge-chip" data-index="{i}">'
+                    f'<span class="merge-value">{v:,}</span>'
+                    f'<button type="button" class="merge-remove" '
+                    f'title="Remove this split to merge the two adjacent bins">\u00d7</button>'
+                    f'</span>'
+                    for i, v in enumerate(splits)
+                )
                 splits_html = (
-                    f'<div class="option-splits">'
+                    f'<div class="option-splits" '
+                    f'data-rounded-splits="{escape(json.dumps(splits))}" data-removed-indices="[]">'
                     f'<span class="splits-label">Splits:</span> '
                     f'<span class="splits-value">{escape(formatted_splits)}</span>'
+                    f'<span class="merge-controls">'
+                    f'<span class="merge-label">Merge bins:</span>'
+                    f'<span class="merge-chips">{merge_chips}</span>'
+                    f'<button type="button" class="merge-reset" '
+                    f'title="Restore all merged bins">\u21ba</button>'
+                    f'</span>'
                     f'<span class="rounding-controls">'
                     f'<span class="rounding-label">Round:</span>'
                     f'<select class="rounding-direction" title="Rounding direction">'
@@ -416,9 +431,19 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .status-table .option-status.optimal {{ color: #16a34a; }}
 .status-table .option-status.infeasible {{ color: #dc2626; }}
 .status-table .option-splits {{ color: #777; font-size: 0.85em; }}
+.status-table .option-splits .splits-value {{ font-size: 1.1em; font-weight: 600; color: #333; }}
 .status-table .option-splits .rounding-controls {{ display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: middle; }}
 .status-table .option-splits .rounding-label {{ margin-right: 1px; }}
 .status-table .option-splits select {{ font-size: 0.9em; padding: 0 2px; height: 20px; line-height: 18px; border: 1px solid #ccc; border-radius: 3px; background: #fff; color: #555; }}
+.status-table .option-splits .merge-controls {{ display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; flex-wrap: wrap; vertical-align: middle; }}
+.status-table .option-splits .merge-label {{ color: #777; font-size: 0.85em; }}
+.status-table .option-splits .merge-chips {{ display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }}
+.status-table .option-splits .merge-chip {{ display: inline-flex; align-items: center; gap: 2px; border: 1px solid #ccc; border-radius: 3px; padding: 1px 3px; background: #f8f9fa; font-size: 0.85em; color: #444; }}
+.status-table .option-splits .merge-chip .merge-value {{ padding: 0 2px; }}
+.status-table .option-splits .merge-remove {{ border: none; background: none; color: #dc2626; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 3px; border-radius: 2px; }}
+.status-table .option-splits .merge-remove:hover {{ background: #fee2e2; }}
+.status-table .option-splits .merge-reset {{ border: 1px solid #ccc; background: #fff; color: #555; cursor: pointer; font-size: 11px; line-height: 1; padding: 2px 5px; border-radius: 3px; }}
+.status-table .option-splits .merge-reset:hover {{ background: #eaf4ff; color: #007bff; }}
 .woe-table-container {{ display: flex; flex-direction: column; gap: 20px; }}
 .woe-row {{ display: flex; flex-direction: column; gap: 8px; }}
 .woe-row-label {{ font-weight: bold; background: #e9ecef; padding: 8px; border-radius: 4px; align-self: flex-start; }}
@@ -722,20 +747,92 @@ function formatSplit(value, precision) {{
     }});
 }}
 
+function readJsonAttr(element, name, fallback) {{
+    const value = element.getAttribute(name);
+    if (value === null || value === '') return fallback;
+    try {{ return JSON.parse(value); }} catch (e) {{ return fallback; }}
+}}
+
+function formatSplitRaw(value) {{
+    return Number(value).toLocaleString('en-US', {{
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 12
+    }});
+}}
+
+function mergeChipRemove(splitsDiv, chip) {{
+    const removedSet = new Set(readJsonAttr(splitsDiv, 'data-removed-indices', []));
+    removedSet.add(parseInt(chip.getAttribute('data-index'), 10));
+    splitsDiv.setAttribute('data-removed-indices',
+        JSON.stringify(Array.from(removedSet).sort((a, b) => a - b)));
+    renderSplitsRow(splitsDiv);
+}}
+
+function renderSplitsRow(splitsDiv) {{
+    const radio = splitsDiv.closest('td').querySelector('input[type="radio"]');
+    if (!radio) return;
+    const original = JSON.parse(radio.getAttribute('data-splits'));
+    const rounded = readJsonAttr(splitsDiv, 'data-rounded-splits', original);
+    const removed = new Set(readJsonAttr(splitsDiv, 'data-removed-indices', []));
+    const working = rounded.filter((v, i) => !removed.has(i));
+    const precision = parseFloat(splitsDiv.querySelector('.rounding-precision').value);
+    const useRoundedDisplay = splitsDiv.getAttribute('data-rounded') === 'true';
+    const fmt = useRoundedDisplay ? (v => formatSplit(v, precision)) : formatSplitRaw;
+    splitsDiv.querySelector('.splits-value').textContent =
+        '[' + working.map(fmt).join('; ') + ']';
+
+    const chips = splitsDiv.querySelector('.merge-chips');
+    if (!chips) return;
+    chips.innerHTML = '';
+    rounded.forEach((v, i) => {{
+        if (removed.has(i)) return;
+        const chip = document.createElement('span');
+        chip.className = 'merge-chip';
+        chip.setAttribute('data-index', String(i));
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'merge-value';
+        valueSpan.textContent = fmt(v);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'merge-remove';
+        btn.title = 'Remove this split to merge the two adjacent bins';
+        btn.textContent = '\u00d7';
+        btn.addEventListener('click', () => mergeChipRemove(splitsDiv, chip));
+        chip.appendChild(valueSpan);
+        chip.appendChild(btn);
+        chips.appendChild(chip);
+    }});
+}}
+
 function updateSplitsRow(splitsDiv) {{
     const radio = splitsDiv.closest('td').querySelector('input[type="radio"]');
+    if (!radio) return;
     const original = JSON.parse(radio.getAttribute('data-splits'));
     const direction = splitsDiv.querySelector('.rounding-direction').value;
     const precision = parseFloat(splitsDiv.querySelector('.rounding-precision').value);
-    splitsDiv.setAttribute('data-rounded', 'true');
     const rounded = original.map(v => roundSplit(Number(v), direction, precision));
-    splitsDiv.querySelector('.splits-value').textContent =
-        '[' + rounded.map(v => formatSplit(v, precision)).join(', ') + ']';
+    splitsDiv.setAttribute('data-rounded-splits', JSON.stringify(rounded));
+    splitsDiv.setAttribute('data-rounded', 'true');
+    renderSplitsRow(splitsDiv);
 }}
 
 document.querySelectorAll('.rounding-direction, .rounding-precision').forEach(sel => {{
     sel.addEventListener('change', function () {{
         updateSplitsRow(this.closest('.option-splits'));
+    }});
+}});
+
+document.querySelectorAll('.merge-remove').forEach(btn => {{
+    btn.addEventListener('click', function () {{
+        mergeChipRemove(this.closest('.option-splits'), this.closest('.merge-chip'));
+    }});
+}});
+
+document.querySelectorAll('.merge-reset').forEach(btn => {{
+    btn.addEventListener('click', function () {{
+        const splitsDiv = this.closest('.option-splits');
+        splitsDiv.setAttribute('data-removed-indices', '[]');
+        renderSplitsRow(splitsDiv);
     }});
 }});
 
