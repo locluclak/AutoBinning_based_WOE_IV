@@ -42,6 +42,7 @@ def main(export_jsons: list, output_file: str = None):
             "label": Path(path).stem,
             "config": payload.get("features", {}),
             "special": normalize_special(config),
+            "important": config.get("important_features", []),
         })
 
     input_file = first_config.get("input_file", "")

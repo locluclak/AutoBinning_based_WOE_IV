@@ -158,6 +158,9 @@ def build_summary_html(meta):
     ]
     table_iv = summary_table("IV total", iv_headers, iv_groups)
 
+    important = [m for m in meta if m.get("important")]
+    table_important = summary_table("Important features", ["Important features"], [important])
+
     metrics = (
         f'<div class="metric"><div class="value">{total}</div><div class="label">Total features</div></div>'
         f'<div class="metric"><div class="value">{sum(m.get("has_optimal", False) for m in meta)}</div>'
@@ -170,7 +173,7 @@ def build_summary_html(meta):
     <section class="summary">
         <h2>Summary</h2>
         <div class="summary-metrics">{metrics}</div>
-        <div class="summary-tables">{table_types}{table_vtypes}{table_iv}</div>
+        <div class="summary-tables">{table_types}{table_vtypes}{table_iv}{table_important}</div>
     </section>
     """
 
@@ -547,11 +550,14 @@ function applyFilters() {{
             statusOk = (statuses.includes('optimal') && s.dataset.hasOptimal === 'true') ||
                        (statuses.includes('infeasible') && s.dataset.allInfeasible === 'true');
         }}
-        const ok = nameOk && statusOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv && (!importantOnly || s.dataset.important === 'true');
+        const ok = nameOk && ((importantOnly && s.dataset.important === 'true') ||
+                              (statusOk && types.includes(s.dataset.type) &&
+                               vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv));
         s.style.display = ok ? '' : 'none';
         if (ok) shown++;
     }});
     document.getElementById('filter-count').textContent = `Showing ${{shown}} / ${{sections.length}}`;
+    updateSelectedCount();
     updateNextUnselectedButton();
 }}
 
@@ -584,7 +590,8 @@ function updateNextUnselectedButton() {{
 }}
 
 function updateSelectedCount() {{
-    const sections = Array.from(document.querySelectorAll('section.feature')).filter(section => !isSkipped(section));
+    const sections = Array.from(document.querySelectorAll('section.feature'))
+        .filter(section => section.style.display !== 'none' && !isSkipped(section));
     const selected = sections.filter(section =>
         section.querySelector('input[type="radio"]:checked')
     ).length;
@@ -639,7 +646,9 @@ document.getElementById('next-unselected').addEventListener('click', () => {{
 
 document.querySelectorAll('.filter-type, .filter-vtype, .filter-status').forEach(el => el.addEventListener('change', applyFilters));
 document.getElementById('filter-iv').addEventListener('input', applyFilters);
-document.getElementById('filter-names').addEventListener('input', applyFilters);
+document.getElementById('filter-names').addEventListener('keydown', (event) => {{
+    if (event.key === 'Enter') applyFilters();
+}});
 document.getElementById('filter-important').addEventListener('change', applyFilters);
 document.querySelectorAll('input.skip-feature').forEach(cb => cb.addEventListener('change', () => {{
     applyFilters();

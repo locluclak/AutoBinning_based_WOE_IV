@@ -132,7 +132,7 @@ def build_special_table_html(x, y, special):
     """
 
 
-def build_special_card(feature, x_full, y, cfg_type, special):
+def build_special_card(feature, x_full, y, cfg_type, special, important=False):
     """Feature card for the 'Special vs Non-Special' option (no plot/splits)."""
     categorical = cfg_type == 'categorical' or (cfg_type is None and is_categorical(x_full))
     ftype = "categorical" if categorical else "continuous"
@@ -186,6 +186,7 @@ def build_special_card(feature, x_full, y, cfg_type, special):
         "v_type": cramer_v_type(v_c),
         "has_optimal": True,
         "all_infeasible": False,
+        "important": important,
     }
     return html, meta
 
@@ -229,7 +230,7 @@ def plot_feature(feature, x, y_clean, splits, special=None, missing_first=False,
     return figure_to_base64(fig)
 
 
-def build_feature_card(feature, cfg, x_full, y, special):
+def build_feature_card(feature, cfg, x_full, y, special, important=False):
     """Build the feature card (WOE plot + tables + meta) for one version.
 
     Returns (html, meta) where meta is a dict for the summary section.
@@ -238,7 +239,7 @@ def build_feature_card(feature, cfg, x_full, y, special):
     part = cfg.get('part', 'consider SPECIAL')
     option = cfg.get('option', '')
     if option == SPECIAL_OPTION or part == SPECIAL_OPTION:
-        return build_special_card(feature, x_full, y, cfg_type, special)
+        return build_special_card(feature, x_full, y, cfg_type, special, important)
     categorical = cfg_type == 'categorical' or (cfg_type is None and is_categorical(x_full))
     consider_special = part.startswith("consider")
 
@@ -322,6 +323,7 @@ def build_feature_card(feature, cfg, x_full, y, special):
         "v_type": cramer_v_type(v_c),
         "has_optimal": True,
         "all_infeasible": False,
+        "important": important,
     }
     return html, meta
 
@@ -373,6 +375,9 @@ def build_summary_html(meta):
     ]
     table_iv = summary_table("IV total", iv_headers, iv_groups)
 
+    important = [m for m in meta if m.get("important")]
+    table_important = summary_table("Important features", ["Important features"], [important])
+
     metrics = (
         f'<div class="metric"><div class="value">{total}</div><div class="label">Total features</div></div>'
         f'<div class="metric"><div class="value">{sum(m.get("has_optimal", False) for m in meta)}</div>'
@@ -385,7 +390,7 @@ def build_summary_html(meta):
     <section class="summary">
         <h2>Summary</h2>
         <div class="summary-metrics">{metrics}</div>
-        <div class="summary-tables">{table_types}{table_vtypes}{table_iv}</div>
+        <div class="summary-tables">{table_types}{table_vtypes}{table_iv}{table_important}</div>
     </section>
     """
 
@@ -426,6 +431,7 @@ def build_report(df, versions, label_name, min_bin_size=0.05):
     for version in versions:
         cfg = version.get("config", {})
         special = version.get("special") or []
+        important_set = {str(f).lower() for f in (version.get("important") or [])}
         results = {}
         meta = []
         skipped = []
@@ -436,7 +442,8 @@ def build_report(df, versions, label_name, min_bin_size=0.05):
                 skipped.append((feature, "Missing in data"))
                 continue
             try:
-                card, card_meta = build_feature_card(feature, fcfg, X_train[feature], y, special)
+                card, card_meta = build_feature_card(feature, fcfg, X_train[feature], y, special,
+                                                     important=str(feature).lower() in important_set)
                 results[feature] = card
                 meta.append(card_meta)
                 print(f"OK: {feature}")
@@ -494,7 +501,9 @@ function applySearch() {{
 }}
 
 document.querySelectorAll('.search-input').forEach(input =>
-    input.addEventListener('input', applySearch));
+    input.addEventListener('keydown', (event) => {{
+        if (event.key === 'Enter') applySearch();
+    }}));
 applySearch();
 </script>
 </body>
