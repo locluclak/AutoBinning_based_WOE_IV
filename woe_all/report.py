@@ -165,7 +165,8 @@ def build_summary_html(meta):
     def cells(items):
         if not items:
             return ""
-        return "<br>".join(escape(str(m['feature'])) + "," for m in items)
+        ordered = sorted(items, key=lambda m: str(m['feature']).lower())
+        return "<br>".join(escape(str(m['feature'])) + "," for m in ordered)
 
     def summary_table(summary, headers, columns):
         header_cells = "".join(
