@@ -3,7 +3,9 @@ Chấm điểm khách hàng bằng cách sử dụng báo cáo CSV theo từng n
 được tạo từ file generate_bins_csv.py.
 
 Cách dùng:
-python generate_score_csv.py raw_data.csv bins_report.csv [output.csv] --reserve SNAPSHOT --id CUSTOMER_CDE
+python generate_score_csv.py raw_data.csv bins_report.csv [output] --reserve SNAPSHOT --id CUSTOMER_CDE
+
+Output được chọn theo phần mở rộng: .csv hoặc .parquet.
 
 Đối với mỗi hàng trong file dữ liệu thô, 
 từng đặc trưng (feature) có trong file CSV nhóm sẽ được ánh xạ vào nhóm mà 
@@ -159,7 +161,9 @@ def main():
     parser = argparse.ArgumentParser(description="Score customers from a bin CSV report.")
     parser.add_argument("input_file", help="raw data file (csv/parquet/xlsx/json)")
     parser.add_argument("bin_csv", help="bin info CSV from generate_bins_csv.py")
-    parser.add_argument("output_csv", nargs="?", default="scored_customers.csv")
+    parser.add_argument("output_file", nargs="?", default="scored_customers.csv",
+                        help="output file; format chosen by extension (csv/parquet) "
+                             "(default: scored_customers.csv)")
     parser.add_argument("--reserve", nargs="*", default=[],
                         help="columns to keep in the output (in addition to the id)")
     parser.add_argument("--id", default="CUSTOMER_CDE",
@@ -191,9 +195,11 @@ def main():
             reserve.append(c)
 
     total = np.zeros(len(df), dtype=float)
+    feature_scores = {}
     for feature in feature_names:
         scorer = FeatureScorer(feature, bins[bins["Feature name"] == feature])
-        total += scorer.score(df[feature])
+        feature_scores[feature] = scorer.score(df[feature])
+        total += feature_scores[feature]
         print(f"OK: {feature} ({len(scorer.intervals)} intervals, "
               f"{len(scorer.label_scores)} labels, {len(scorer.special_scores)} specials)")
 
@@ -202,10 +208,12 @@ def main():
         out[c] = df[c].values
     for f in feature_names:
         out[f] = df[f].values
+    for f in feature_names:
+        out[f"{f}_bin_score"] = np.round(feature_scores[f], 6)
     out["score"] = np.round(total, 6)
 
-    write_data(out, args.output_csv)
-    print(f"Scored CSV: {args.output_csv} ({len(out)} rows, {len(feature_names)} features)")
+    write_data(out, args.output_file)
+    print(f"Scored output: {args.output_file} ({len(out)} rows, {len(feature_names)} features)")
 
 
 if __name__ == "__main__":
