@@ -5,13 +5,14 @@ import pandas as pd
 
 from core.config_loader import CONFIG, IGNORE_COLUMN, IMPORTANT_FEATURES
 from core.export_script import EXPORT_SCRIPT
-from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramers,
+from core.woe_stats import (SPECIAL_OPTION, add_score_column, chi2_cramers,
                             chi2_cramers_categorical, cramer_v_color, cramer_v_type,
-                            create_missing_woe_df, create_woe_df, create_woe_df_categorical,
-                            figure_to_base64, format_p_value, is_categorical)
+                            create_woe_df, create_woe_df_categorical, figure_to_base64,
+                            format_p_value, is_categorical)
 from .html_tables import (compute_result_stats, compute_result_woe_df, display_woe_tables,
                           option_meta_html, option_stats_html)
-from .optimization import calculate_categorical_feature, calculate_feature
+from .optimization import (calculate_categorical_feature, calculate_feature,
+                           calculate_special_option)
 from .plotting import plot_options
 
 
@@ -46,60 +47,6 @@ PRECISION_OPTIONS = [
 ]
 
 
-def build_missing_table_html(x, y):
-    labels = pd.Series(["Missing" if pd.isna(v) else "Non-Missing" for v in x],
-                       index=x.index, dtype=object)
-    p_value, v_c = chi2_contingency_test(labels, pd.Series(y, index=x.index))
-    missing_woe_df = add_score_column(create_missing_woe_df(x, y), v_c)
-    iv_total = missing_woe_df["IV_total"].iloc[0] if "IV_total" in missing_woe_df.columns else None
-    display_df = missing_woe_df.drop(columns=["IV_total"], errors="ignore")
-    valid_formats = {k: v for k, v in MISSING_FORMATS.items() if k in display_df.columns}
-    table_html = display_df.style.format(valid_formats).to_html()
-
-    meta_parts = []
-    if iv_total is not None:
-        iv_total_text = MISSING_FORMATS.get("IV_total", "{:.2f}").format(iv_total)
-        iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
-        meta_parts.append(
-            f'<span class="iv-total">'
-            f'<span class="iv-label">IV total:</span> '
-            f'<b class="iv-value" style="color:{iv_color}">{iv_total_text}</b>'
-            f'</span>'
-        )
-    p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
-    meta_parts.append(
-        f'<span class="p-value" style="color:{p_color}">'
-        f'<span class="stat-label">p-value:</span> '
-        f'<b>{format_p_value(p_value)}</b>'
-        f'</span>'
-    )
-    title = " ".join(meta_parts)
-
-    v_color = cramer_v_color(v_c)
-    stats_html = (
-        f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
-        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
-        f' &nbsp;-&nbsp; '
-        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
-        f'</div>'
-    )
-
-    return f"""
-    <div class="woe-table-container">
-        <div class="woe-row">
-            <div class="woe-row-label">Missing vs Non-Missing</div>
-            <div class="woe-row-columns">
-                <div class="woe-block">
-                    <div style="margin-bottom: 6px;">{title}</div>
-                    {stats_html}
-                    {table_html}
-                </div>
-            </div>
-        </div>
-    </div>
-    """
-
-
 def compute_feature_results(feature, X_train, y):
     """Compute all binning options/parts for a feature.
 
@@ -113,13 +60,18 @@ def compute_feature_results(feature, X_train, y):
     else:
         for consider in (False, True):
             results.update(calculate_feature(feature, X_train, y, considerSPECIAL=consider))
+    results.update(calculate_special_option(feature, X_train, y))
 
     parts = {}
     for option_name, result in results.items():
+        if result.get('special_vs_non_special'):
+            continue
         parts.setdefault(result['part'], {})[result['option']] = result
 
     option_names = []
     for result in results.values():
+        if result.get('special_vs_non_special'):
+            continue
         if result['option'] not in option_names:
             option_names.append(result['option'])
 
@@ -134,6 +86,8 @@ def feature_summary(feature, X_train, y, results):
     ftype = "categorical" if is_categorical(X_train[feature]) else "continuous"
     best = None
     for result in results.values():
+        if result.get('special_vs_non_special'):
+            continue
         if result['model'].status not in ("OPTIMAL", "OK"):
             continue
         if result.get('categorical'):
@@ -244,13 +198,13 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
 
     _, tables_html = display_woe_tables(results=results, create_woe_df_func=create_woe_df, render=False)
 
-    missing_html = build_missing_table_html(X_train[feature], y)
-
     ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
 
-    statuses = [r["model"].status for r in results.values()]
+    statuses = [r["model"].status for r in results.values()
+                if not r.get("special_vs_non_special")]
     has_optimal = any(s in ("OPTIMAL", "OK") for s in statuses)
     all_infeasible = bool(statuses) and all(s == "INFEASIBLE" for s in statuses)
+    special_result = next((r for r in results.values() if r.get("special_vs_non_special")), None)
 
     status_rows = []
     for idx, (part, part_results) in enumerate(parts.items()):
@@ -334,6 +288,28 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
             f"</tr>"
         )
 
+    if special_result is not None:
+        special_woe_df = compute_result_woe_df(special_result, create_woe_df)
+        special_stats = compute_result_stats(special_result)
+        special_meta_html = option_meta_html(special_woe_df, special_stats)
+        special_stats_html = option_stats_html(special_stats)
+        special_ftype = "categorical" if special_result.get('categorical') else "continuous"
+        status_rows.append(
+            f"<tr>"
+            f"<th class=\"part-label\">{escape(SPECIAL_OPTION)}</th>"
+            f"<td colspan=\"{len(option_names)}\">"
+            f"<label class=\"option-choice\">"
+            f"<input type=\"radio\" name=\"{escape(str(feature))}\" value=\"special\" "
+            f"data-option=\"{escape(SPECIAL_OPTION)}\" "
+            f"data-part=\"{escape(SPECIAL_OPTION)}\" "
+            f"data-type=\"{special_ftype}\" data-splits=\"[]\" data-status=\"OK\">"
+            f"{escape(SPECIAL_OPTION)}</label>"
+            f"<div class=\"option-metrics\">{special_meta_html}{special_stats_html}</div>"
+            f"<div class=\"option-status ok\">Status: OK</div>"
+            f"</td>"
+            f"</tr>"
+        )
+
     option_headers = "".join(f"<th>{escape(o)}</th>" for o in option_names)
     status_html = f"""
     <table class="status-table" data-feature="{escape(str(feature))}">
@@ -355,7 +331,6 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
         <h3>WOE Trend &amp; Bin Count Comparison</h3>
         {plot_html}
         <h3>WOE Tables</h3>
-        {missing_html}
         {tables_html}
         <hr class="feature-separator">
     </section>
@@ -377,7 +352,8 @@ def build_report(df:pd.DataFrame, label_name = "LABEL"):
         try:
             results, parts, option_names = compute_feature_results(feature, X_train, y)
             ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
-            statuses = [r["model"].status for r in results.values()]
+            statuses = [r["model"].status for r in results.values()
+                        if not r.get("special_vs_non_special")]
             important = str(feature).lower() in important_set
             feature_meta.append({
                 "feature": feature,
@@ -536,7 +512,7 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
         </span>
         <span class="filter-group">
             <span class="filter-label">Feature names:</span>
-            <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
+            <input type="text" id="filter-names" placeholder="CASH, TOI, ...">
         </span>
         <button type="button" id="next-unselected" class="filter-action">Next unselected feature</button>
         <span class="filter-counts" aria-live="polite">
@@ -563,7 +539,7 @@ function applyFilters() {{
     const sections = document.querySelectorAll('section.feature');
     let shown = 0;
     sections.forEach(s => {{
-        const nameOk = names.length === 0 || names.includes(s.dataset.feature.toLowerCase());
+        const nameOk = names.length === 0 || names.some(n => s.dataset.feature.toLowerCase().startsWith(n));
         let statusOk = true;
         if (statuses.length === 0) {{
             statusOk = false;

@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 
 
+SPECIAL_OPTION = "Special vs Non-Special"
+
+
 def is_categorical(series):
     """Detect whether a feature should be treated as categorical (no OptimalBinning).
 
@@ -254,6 +257,33 @@ def create_missing_woe_df(x, y):
             "bin": name,
             "n_events": int((mask & (data['target'] == 1)).sum()),
             "n_non_events": int((mask & (data['target'] == 0)).sum()),
+        })
+    grouped = pd.DataFrame(rows)
+
+    total_obs = len(data)
+    total_events = (data['target'] == 1).sum()
+    total_non_events = (data['target'] == 0).sum()
+
+    return _finalize_woe(grouped, total_obs, total_events, total_non_events)
+
+
+def create_special_woe_df(x, y, special=None, specialvalue=None):
+    """
+    Create a WOE / IV table with only two groups: Special and Non-Special.
+
+    The Special group contains every row whose value matches one of the
+    configured special values ('MISSING' matches missing rows, the other
+    values match by equality).
+    """
+    data = pd.DataFrame({'x': x, 'target': y})
+    mask = special_mask(data['x'], special=special, specialvalue=specialvalue)
+
+    rows = []
+    for name, sel in (("Special", mask), ("Non-special", ~mask)):
+        rows.append({
+            "bin": name,
+            "n_events": int((sel & (data['target'] == 1)).sum()),
+            "n_non_events": int((sel & (data['target'] == 0)).sum()),
         })
     grouped = pd.DataFrame(rows)
 

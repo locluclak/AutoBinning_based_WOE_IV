@@ -3,7 +3,7 @@ import pandas as pd
 from optbinning import OptimalBinning
 
 from core.config_loader import (MAX_BIN, MAX_BIN_SIZE, MIN_BIN, MIN_BIN_SIZE, MIN_DIFF_WOE, SPECIAL)
-from core.woe_stats import create_woe_df, special_mask
+from core.woe_stats import SPECIAL_OPTION, create_woe_df, is_categorical, special_mask
 
 
 OPTIONS = {
@@ -25,6 +25,14 @@ class _CategoricalModel:
     def __init__(self, groups):
         self.status = "OK"
         self.splits = list(groups)
+        self.binning_table = None
+
+
+class _SpecialModel:
+    """Placeholder model for the 'Special vs Non-Special' option."""
+    def __init__(self):
+        self.status = "OK"
+        self.splits = []
         self.binning_table = None
 
 
@@ -142,6 +150,30 @@ def calculate_feature(feature, X_train, y, considerSPECIAL=False):
         }
 
     return results
+
+
+def calculate_special_option(feature, X_train, y):
+    """Build the 'Special vs Non-Special' option for a feature.
+
+    Two groups only (Special / Non-Special), no binning splits required.
+    The Special group is defined by the configured special values.
+    The WOE table is produced downstream from create_special_woe_df.
+    """
+    x = X_train[feature]
+    result = {
+        "part": SPECIAL_OPTION,
+        "option": SPECIAL_OPTION,
+        "categorical": is_categorical(x),
+        "model": _SpecialModel(),
+        "splits": [],
+        "binning_table": None,
+        "x": x,
+        "y": y,
+        "missing_first": False,
+        "special": list(SPECIAL),
+        "special_vs_non_special": True,
+    }
+    return {f"{SPECIAL_OPTION} | {SPECIAL_OPTION}": result}
 
 
 def calculate_categorical_feature(feature, X_train, y, considerSPECIAL=False):

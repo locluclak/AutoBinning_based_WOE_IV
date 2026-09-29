@@ -65,6 +65,8 @@ def plot_options(results, feature):
     """
     parts = {}
     for option_key, result in results.items():
+        if result.get("special_vs_non_special"):
+            continue
         parts.setdefault(result.get('part', ''), []).append((option_key, result))
 
     out = []

@@ -1,9 +1,11 @@
 import numpy as np
+import pandas as pd
 
 from html import escape
 
-from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
-                            cramer_v_color, cramer_v_type, format_p_value)
+from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramers,
+                            chi2_cramers_categorical, cramer_v_color, cramer_v_type,
+                            format_p_value, special_mask)
 
 DEFAULT_FORMATS = {
     "prob_n_obs": "{:.2%}",
@@ -24,6 +26,12 @@ def compute_result_stats(result):
     """
     if result["model"].status not in ("OPTIMAL", "OK"):
         return None
+    if result.get("special_vs_non_special"):
+        x = result["x"]
+        mask = special_mask(x, special=result.get("special"))
+        labels = pd.Series(["Special" if m else "Non-special" for m in mask],
+                           index=x.index, dtype=object)
+        return chi2_contingency_test(labels, pd.Series(result["y"], index=x.index))
     if result.get("categorical"):
         return chi2_cramers_categorical(result["x"], result["y"])
     return chi2_cramers(result["x"], result["y"], result["splits"],
@@ -32,8 +40,10 @@ def compute_result_stats(result):
 
 def compute_result_woe_df(result, create_woe_df_func):
     """Build the WOE/IV table for a result (categorical-aware)."""
-    from core.woe_stats import create_woe_df_categorical
+    from core.woe_stats import create_special_woe_df, create_woe_df_categorical
 
+    if result.get("special_vs_non_special"):
+        return create_special_woe_df(result["x"], result["y"], special=result.get("special"))
     missing_first = result.get("missing_first", False)
     if result.get("categorical"):
         return create_woe_df_categorical(result["x"], result["y"], missing_first=missing_first)

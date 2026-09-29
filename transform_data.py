@@ -9,8 +9,9 @@ import numpy as np
 import pandas as pd
 
 from core.io_utils import load_data, write_data
-from core.woe_stats import (create_woe_df, create_woe_df_categorical, is_categorical,
-                            add_score_column, chi2_cramers, chi2_cramers_categorical,
+from core.woe_stats import (SPECIAL_OPTION, add_score_column, chi2_contingency_test,
+                            chi2_cramers, chi2_cramers_categorical, create_special_woe_df,
+                            create_woe_df, create_woe_df_categorical, is_categorical,
                             _normalize_special, special_mask)
 
 
@@ -109,6 +110,34 @@ def transform_categorical_feature(feature, x, y, categories, consider_special=Tr
     return result
 
 
+def transform_special_feature(feature, x, y, special):
+    """Transformed columns for the 'Special vs Non-Special' option."""
+    mask = special_mask(x, special=special)
+    labels = pd.Series(["Special" if m else "Non-special" for m in mask],
+                       index=x.index, dtype=object)
+    _, v_c = chi2_contingency_test(labels, pd.Series(y, index=x.index))
+    woe_df = create_special_woe_df(x, y, special=special)
+    score_df = add_score_column(woe_df, v_c)
+    woe_map = dict(zip(woe_df['Bin'], woe_df['WOE']))
+    score_map = dict(zip(score_df['Bin'], score_df['score']))
+
+    result = pd.DataFrame(index=x.index)
+    result[f"{feature}_WOE"] = np.nan
+    result[f"{feature}_score"] = np.nan
+    result[f"{feature}_bin1"] = 0
+    result[f"{feature}_SPECIAL"] = 0
+
+    sel_special = mask
+    sel_non = ~mask
+    result.loc[sel_non, f"{feature}_bin1"] = 1
+    result.loc[sel_special, f"{feature}_SPECIAL"] = 1
+    result.loc[sel_non, f"{feature}_WOE"] = woe_map.get("Non-special", np.nan)
+    result.loc[sel_special, f"{feature}_WOE"] = woe_map.get("Special", np.nan)
+    result.loc[sel_non, f"{feature}_score"] = score_map.get("Non-special", np.nan)
+    result.loc[sel_special, f"{feature}_score"] = score_map.get("Special", np.nan)
+    return result
+
+
 def build_transformed(df, features_config, label_name, special=None, min_bin_size=0.05):
     X_train = df.drop(columns=[label_name])
     y = pd.Series(df[label_name].values, index=X_train.index)
@@ -127,7 +156,9 @@ def build_transformed(df, features_config, label_name, special=None, min_bin_siz
             part = cfg.get('part', 'consider SPECIAL')
             consider_special = part.startswith("consider")
             cfg_type = cfg.get('type')
-            if cfg_type == 'categorical' or (cfg_type is None and is_categorical(x)):
+            if cfg.get('option') == SPECIAL_OPTION or part == SPECIAL_OPTION:
+                tf = transform_special_feature(feature, x, y, special)
+            elif cfg_type == 'categorical' or (cfg_type is None and is_categorical(x)):
                 categories = [str(c) for c in cfg.get('splits', [])]
                 if not categories:
                     categories = [str(c) for c in pd.unique(x.dropna())]

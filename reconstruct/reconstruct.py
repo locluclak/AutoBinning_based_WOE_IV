@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
-                            cramer_v_color, cramer_v_type, create_woe_df,
+from core.woe_stats import (SPECIAL_OPTION, add_score_column, chi2_contingency_test,
+                            chi2_cramers, chi2_cramers_categorical, cramer_v_color,
+                            cramer_v_type, create_special_woe_df, create_woe_df,
                             create_woe_df_categorical, figure_to_base64, format_p_value,
                             get_bin_stats, get_bin_stats_categorical, is_categorical, special_mask)
 
@@ -84,6 +85,111 @@ def woe_table_html(woe_df, v_c):
     return display_df.style.format(valid_formats).to_html()
 
 
+def build_special_table_html(x, y, special):
+    mask = special_mask(x, special=special)
+    labels = pd.Series(["Special" if m else "Non-special" for m in mask],
+                       index=x.index, dtype=object)
+    p_value, v_c = chi2_contingency_test(labels, pd.Series(y, index=x.index))
+    special_woe_df = add_score_column(create_special_woe_df(x, y, special=special), v_c)
+    iv_total = special_woe_df["IV_total"].iloc[0] if "IV_total" in special_woe_df.columns else None
+    display_df = special_woe_df.drop(columns=["IV_total"], errors="ignore")
+    valid_formats = {k: v for k, v in DEFAULT_FORMATS.items() if k in display_df.columns}
+    table_html = display_df.style.format(valid_formats).to_html()
+
+    meta_parts = []
+    if iv_total is not None:
+        iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+        meta_parts.append(
+            f'<span class="iv-total">'
+            f'<span class="iv-label">IV total:</span> '
+            f'<b class="iv-value" style="color:{iv_color}">{iv_total:.2f}</b>'
+            f'</span>'
+        )
+    p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
+    meta_parts.append(
+        f'<span class="p-value" style="color:{p_color}">'
+        f'<span class="stat-label">p-value:</span> '
+        f'<b>{format_p_value(p_value)}</b>'
+        f'</span>'
+    )
+    title = " ".join(meta_parts)
+
+    v_color = cramer_v_color(v_c)
+    stats_html = (
+        f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
+        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+        f' &nbsp;-&nbsp; '
+        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+        f'</div>'
+    )
+
+    return f"""
+    <div class="woe-block">
+        <div style="margin-bottom: 6px;">{title}</div>
+        {stats_html}
+        {table_html}
+    </div>
+    """
+
+
+def build_special_card(feature, x_full, y, cfg_type, special):
+    """Feature card for the 'Special vs Non-Special' option (no plot/splits)."""
+    categorical = cfg_type == 'categorical' or (cfg_type is None and is_categorical(x_full))
+    ftype = "categorical" if categorical else "continuous"
+
+    mask = special_mask(x_full, special=special)
+    labels = pd.Series(["Special" if m else "Non-special" for m in mask],
+                       index=x_full.index, dtype=object)
+    p_value, v_c = chi2_contingency_test(labels, pd.Series(y, index=x_full.index))
+    woe_df = create_special_woe_df(x_full, y, special=special)
+    iv_total = float(woe_df['IV_total'].iloc[0])
+    special_html = build_special_table_html(x_full, y, special)
+
+    iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
+    meta_html = (
+        f'<div class="feature-meta">'
+        f'<span class="iv-total"><span class="iv-label">IV total:</span> '
+        f'<b class="iv-value" style="color:{iv_color}">{iv_total:.2f}</b></span>'
+        f'<span class="p-value" style="color:{"#16a34a" if p_value <= 0.05 else "#dc2626"}">'
+        f'<span class="stat-label">p-value:</span> <b>{format_p_value(p_value)}</b></span>'
+        f'</div>'
+    )
+    v_color = cramer_v_color(v_c)
+    stats_html = (
+        f'<div class="cramers" style="color:{v_color}">'
+        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
+        f' &nbsp;-&nbsp; '
+        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
+        f'</div>'
+    )
+
+    html = f"""
+    <div class="feature-card" data-feature="{escape(str(feature))}" data-type="{ftype}">
+        <h2>{escape(str(feature))}</h2>
+        {meta_html}
+        {stats_html}
+        <p class="option">Selected option: {escape(SPECIAL_OPTION)}</p>
+        <h3>WOE Tables</h3>
+        <div class="woe-table-container">
+            <div class="woe-row">
+                <div class="woe-row-label">{escape(SPECIAL_OPTION)}</div>
+                <div class="woe-row-columns">{special_html}</div>
+            </div>
+        </div>
+    </div>
+    """
+
+    meta = {
+        "feature": feature,
+        "type": ftype,
+        "iv_total": iv_total,
+        "v_type": cramer_v_type(v_c),
+        "has_optimal": True,
+        "all_infeasible": False,
+    }
+    return html, meta
+
+
 def plot_feature(feature, x, y_clean, splits, special=None, missing_first=False, categorical=False):
     fig, ax = plt.subplots(figsize=(7, 6))
     if categorical:
@@ -129,10 +235,12 @@ def build_feature_card(feature, cfg, x_full, y, special):
     Returns (html, meta) where meta is a dict for the summary section.
     """
     cfg_type = cfg.get('type')
-    categorical = cfg_type == 'categorical' or (cfg_type is None and is_categorical(x_full))
     part = cfg.get('part', 'consider SPECIAL')
-    consider_special = part.startswith("consider")
     option = cfg.get('option', '')
+    if option == SPECIAL_OPTION or part == SPECIAL_OPTION:
+        return build_special_card(feature, x_full, y, cfg_type, special)
+    categorical = cfg_type == 'categorical' or (cfg_type is None and is_categorical(x_full))
+    consider_special = part.startswith("consider")
 
     if categorical:
         splits = [str(c) for c in cfg.get('splits', [])]
@@ -376,7 +484,7 @@ function applySearch() {{
         if (inputs.length > 0) {{
             ok = inputs.some(input => {{
                 const names = getSearchNames(input);
-                return names.length === 0 || names.includes(feature);
+                return names.length === 0 || names.some(n => feature.startsWith(n));
             }});
         }}
         t.style.display = ok ? '' : 'none';
@@ -401,7 +509,7 @@ def build_search_bar(version_data):
         <span class="filter-group">
             <span class="filter-label">Search features:</span>
             <input type="text" class="search-input" id="search-0"
-                placeholder="feature_name1, feature_name2, ...">
+                placeholder="CASH, TOI, ...">
         </span>
         <span class="filter-counts" aria-live="polite">
             <span id="filter-count">Showing all</span>
