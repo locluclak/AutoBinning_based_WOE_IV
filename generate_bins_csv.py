@@ -24,8 +24,9 @@ import pandas as pd
 from scipy.stats import chi2_contingency
 
 from core.io_utils import load_data
-from core.woe_stats import (cramer_v_type, create_woe_df, create_woe_df_categorical,
-                            is_categorical, special_mask)
+from core.woe_stats import (SPECIAL_OPTION, cramer_v_type, create_special_woe_df,
+                            create_woe_df, create_woe_df_categorical, is_categorical,
+                            special_mask)
 
 CSV_COLUMNS = [
     "Label name",
@@ -185,6 +186,8 @@ def process_feature(name, cfg, x, y, special_values, label_name):
     categorical = ftype == "categorical"
 
     part = cfg.get("part", "considerMISSING")
+    if cfg.get("option") == SPECIAL_OPTION or part == SPECIAL_OPTION:
+        return special_option_rows(name, x, y, special_values, label_name, ftype)
     consider = str(part).lower().startswith("consider")
     missing_first = consider
     splits = list(cfg.get("splits") or [])
@@ -219,6 +222,61 @@ def process_feature(name, cfg, x, y, special_values, label_name):
     for _, row in merged.iterrows():
         event_cnt = int(row["n_events"])
         non_event_cnt = int(row["n_non_events"])
+        n_obs = event_cnt + non_event_cnt
+        contribution = n_obs / total_obs * 100 if total_obs else 0.0
+        conversion = event_cnt / n_obs * 100 if n_obs else 0.0
+        dist_event = event_cnt / total_events * 100 if total_events else 0.0
+        dist_non_event = non_event_cnt / total_non_events * 100 if total_non_events else 0.0
+        woe = float(row["WOE"])
+        iv = float(row["IV_detail"])
+        score = np.sign(woe) * v_c * (iv / iv_total) * 100 if iv_total else 0.0
+
+        rows.append({
+            "Label name": label_name,
+            "Feature type": ftype,
+            "Feature name": name,
+            "Column name": name,
+            "Bin": row["Bin"],
+            "Number customer": n_obs,
+            "Contribution": round6(contribution),
+            "Conversion rate": round6(conversion),
+            "Event_cnt": event_cnt,
+            "Non_event_cnt": non_event_cnt,
+            "Dist_event": round6(dist_event),
+            "Dist_non_event": round6(dist_non_event),
+            "ChiSquare": round6(chi2_stat),
+            "P_value": round6(p_value),
+            "Pvalue_remark": "YES" if p_value <= 0.05 else "NO",
+            "CramerV": round6(v_c),
+            "CramerV_remark": remark,
+            "WOE": round6(woe),
+            "IV_bin": round6(iv),
+            "IV_total of feature": round6(iv_total),
+            "score": round6(score),
+        })
+    return rows
+
+
+def special_option_rows(name, x, y, special_values, label_name, ftype):
+    """Rows for the 'Special vs Non-Special' option: two bins only."""
+    mask = special_mask(x, special=special_values)
+    labels = pd.Series(["Special" if m else "Non-special" for m in mask],
+                       index=x.index, dtype=object)
+    chi2_stat, p_value, v_c = chi2_stats(labels, pd.Series(y, index=x.index))
+    woe_df = create_special_woe_df(x, y, special=special_values)
+    iv_total = float(woe_df["IV_total"].iloc[0])
+    remark = cramer_v_type(v_c)
+
+    total_events = int((y == 1).sum())
+    total_non_events = int((y == 0).sum())
+    total_obs = len(y)
+
+    rows = []
+    for _, row in woe_df.iterrows():
+        is_special = row["Bin"] == "Special"
+        sel = mask if is_special else ~mask
+        event_cnt = int((sel & (y == 1)).sum())
+        non_event_cnt = int((sel & (y == 0)).sum())
         n_obs = event_cnt + non_event_cnt
         contribution = n_obs / total_obs * 100 if total_obs else 0.0
         conversion = event_cnt / n_obs * 100 if n_obs else 0.0

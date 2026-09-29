@@ -22,7 +22,9 @@ import sys
 import numpy as np
 import pandas as pd
 
+from core.config_loader import SPECIAL
 from core.io_utils import load_data, write_data
+from core.woe_stats import special_mask
 
 BIN_COLUMNS = ["Feature name", "Feature type", "Bin", "score"]
 
@@ -60,6 +62,8 @@ class FeatureScorer:
         self.feature = feature
         self.ftype = str(rows["Feature type"].iloc[0]).strip().lower()
         self.missing_score = 0.0
+        self.special_bin_score = 0.0
+        self.non_special_bin_score = 0.0
         self.special_scores = {}
         self.label_scores = {}
         self.intervals = []
@@ -69,6 +73,10 @@ class FeatureScorer:
             name = str(row["Bin"])
             if name == "Missing":
                 self.missing_score = score
+            elif name == "Special":
+                self.special_bin_score = score
+            elif name == "Non-special":
+                self.non_special_bin_score = score
             elif name.startswith("Special "):
                 self.special_scores[name[len("Special "):]] = score
             else:
@@ -99,8 +107,8 @@ class FeatureScorer:
         if self.missing_score:
             scores[is_null.values] = self.missing_score
 
-        special_mask = self._special_mask(values) if self.special_scores else None
-        if special_mask is not None and special_mask.any():
+        per_value_mask = self._special_mask(values) if self.special_scores else None
+        if per_value_mask is not None and per_value_mask.any():
             for label, s in self.special_scores.items():
                 part = values.eq(label)
                 try:
@@ -113,10 +121,14 @@ class FeatureScorer:
                 scores[part.values & ~is_null.values] = s
 
         remaining = ~is_null.values
-        if special_mask is not None:
-            remaining &= ~special_mask.values
+        if per_value_mask is not None:
+            remaining &= ~per_value_mask.values
 
-        if self.intervals and remaining.any():
+        if self.special_bin_score or self.non_special_bin_score:
+            sp = special_mask(values, special=SPECIAL)
+            scores[sp.values] = self.special_bin_score
+            scores[~sp.values] = self.non_special_bin_score
+        elif self.intervals and remaining.any():
             idx = np.flatnonzero(remaining)
             cut_values = pd.to_numeric(values[remaining], errors="coerce")
             valid = ~cut_values.isna()
@@ -136,7 +148,7 @@ class FeatureScorer:
                 target = idx[valid.values]
                 scores[target] = bin_scores
 
-        if not self.intervals and remaining.any():
+        elif not self.intervals and remaining.any():
             lookup = {}
             for u in pd.unique(values[remaining]):
                 if pd.isna(u):
