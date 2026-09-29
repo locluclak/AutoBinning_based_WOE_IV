@@ -19,5 +19,6 @@ if SPECIAL is None:
     SPECIAL = [SPECIALVALUE] if SPECIALVALUE is not None else []
 MIN_DIFF_WOE = CONFIG["min_diff_woe"]
 IGNORE_COLUMN = CONFIG.get("ignore_column", [])
+IMPORTANT_FEATURES = CONFIG.get("important_features", [])
 MIN_BIN_SIZE = CONFIG.get("min_bin_size", 0.05)
 MAX_BIN_SIZE = CONFIG.get("max_bin_size", 0.50)

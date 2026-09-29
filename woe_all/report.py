@@ -3,7 +3,7 @@ from html import escape
 
 import pandas as pd
 
-from core.config_loader import CONFIG, IGNORE_COLUMN
+from core.config_loader import CONFIG, IGNORE_COLUMN, IMPORTANT_FEATURES
 from core.export_script import EXPORT_SCRIPT
 from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramers,
                             chi2_cramers_categorical, cramer_v_color, cramer_v_type,
@@ -217,7 +217,7 @@ def build_summary_html(meta):
     """
 
 
-def build_feature_html(feature, X_train, y, results=None, parts=None, option_names=None):
+def build_feature_html(feature, X_train, y, results=None, parts=None, option_names=None, important=False):
     if results is None:
         results, parts, option_names = compute_feature_results(feature, X_train, y)
 
@@ -342,8 +342,11 @@ def build_feature_html(feature, X_train, y, results=None, parts=None, option_nam
 
     return f"""
     <section class="feature" data-feature="{escape(str(feature))}" data-type="{ftype}" data-iv="{iv_total:.4f}" data-vtype="{v_type}"
-        data-has-optimal="{str(has_optimal).lower()}" data-all-infeasible="{str(all_infeasible).lower()}">
+        data-has-optimal="{str(has_optimal).lower()}" data-all-infeasible="{str(all_infeasible).lower()}"
+        data-important="{str(important).lower()}">
         <h2>{escape(str(feature))}</h2>
+        <label class="feature-skip" title="Exclude this feature from export and from the 'Next unselected feature' navigation">
+            <input type="checkbox" class="skip-feature">Skip this feature</label>
         {status_html}
         <h3>WOE Trend &amp; Bin Count Comparison</h3>
         {plot_html}
@@ -364,25 +367,30 @@ def build_report(df:pd.DataFrame, label_name = "LABEL"):
     sections = []
     skipped = []
     feature_meta = []
+    important_set = {str(f).lower() for f in IMPORTANT_FEATURES}
 
     for feature in features:
         try:
             results, parts, option_names = compute_feature_results(feature, X_train, y)
             ftype, iv_total, v_type = feature_summary(feature, X_train, y, results)
             statuses = [r["model"].status for r in results.values()]
+            important = str(feature).lower() in important_set
             feature_meta.append({
                 "feature": feature,
                 "type": ftype,
                 "iv_total": iv_total,
                 "v_type": v_type,
+                "important": important,
                 "has_optimal": any(s in ("OPTIMAL", "OK") for s in statuses),
                 "all_infeasible": bool(statuses) and all(s == "INFEASIBLE" for s in statuses),
             })
-            sections.append(build_feature_html(feature, X_train, y, results, parts, option_names))
+            sections.append(build_feature_html(feature, X_train, y, results, parts, option_names, important=important))
             print(f"OK: {feature}")
         except Exception as exc:
             skipped.append((feature, exc))
             print(f"SKIP: {feature} -> {type(exc).__name__}: {exc}")
+
+    n_important = sum(1 for m in feature_meta if m.get("important"))
 
     summary_html = build_summary_html(feature_meta)
 
@@ -410,7 +418,7 @@ def build_report(df:pd.DataFrame, label_name = "LABEL"):
 <style>
 body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
 h1 {{ margin-bottom: 8px; }}
-h1.title {{ text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px; }}
+h1.title {{ text-align: center; font-size: 24px; color: #111; margin: 8px 0; }}
 h2 {{ margin-top: 0; }}
 .feature h2 {{ font-size: 28px; }}
 h3 {{ margin-top: 24px; }}
@@ -485,10 +493,13 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
 .summary-table {{ border-collapse: collapse; table-layout: fixed; width: 100%; background: #f8f9fa; border: 1px solid #dee2e6; }}
 .summary-table th {{ border: 1px solid #dee2e6; padding: 8px 12px; background: #e9ecef; font-weight: bold; color: #333; }}
 .summary-table td {{ border: 1px solid #dee2e6; padding: 8px 12px; vertical-align: top; white-space: normal; line-height: 1.5; }}
+.feature-skip {{ display: inline-flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 0.9em; color: #dc2626; cursor: pointer; user-select: none; }}
+.feature-skip input {{ accent-color: #dc2626; cursor: pointer; }}
 </style>
 </head>
 <body>
 <div class="report-header">
+    <h1 class="title">{escape(str(label_name))}</h1>
     <div class="export-btns">
         <button class="export-btn" onclick="exportConfig()">Export Selected Splits (JSON)</button>
         <button class="export-btn" onclick="exportSelectedHTML()">Export Selected Report (HTML)</button>
@@ -516,6 +527,10 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
             <label><input type="checkbox" class="filter-status" value="infeasible" checked>All INFEASIBLE</label>
         </span>
         <span class="filter-group">
+            <span class="filter-label">Importance:</span>
+            <label><input type="checkbox" id="filter-important">Important only ({n_important})</label>
+        </span>
+        <span class="filter-group">
             <span class="filter-label">Feature names:</span>
             <input type="text" id="filter-names" placeholder="feature_1, feature_2, ...">
         </span>
@@ -526,7 +541,6 @@ th, td {{ padding: 6px 8px; text-align: left; vertical-align: top; }}
         </span>
     </div>
 </div>
-<h1 class="title">{escape(str(label_name))}</h1>
 <p>Features are processed independently. A feature that raises an exception is skipped.</p>
 {summary_html}
 {skipped_html}
@@ -539,6 +553,7 @@ function applyFilters() {{
     const vtypes = Array.from(document.querySelectorAll('.filter-vtype:checked')).map(c => c.value);
     const statuses = Array.from(document.querySelectorAll('.filter-status:checked')).map(c => c.value);
     const minIv = parseFloat(document.getElementById('filter-iv').value) || 0;
+    const importantOnly = document.getElementById('filter-important').checked;
     const rawNames = document.getElementById('filter-names').value;
     const names = rawNames.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     const sections = document.querySelectorAll('section.feature');
@@ -552,7 +567,7 @@ function applyFilters() {{
             statusOk = (statuses.includes('optimal') && s.dataset.hasOptimal === 'true') ||
                        (statuses.includes('infeasible') && s.dataset.allInfeasible === 'true');
         }}
-        const ok = nameOk && statusOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv;
+        const ok = nameOk && statusOk && types.includes(s.dataset.type) && vtypes.includes(s.dataset.vtype) && parseFloat(s.dataset.iv) >= minIv && (!importantOnly || s.dataset.important === 'true');
         s.style.display = ok ? '' : 'none';
         if (ok) shown++;
     }});
@@ -560,9 +575,15 @@ function applyFilters() {{
     updateNextUnselectedButton();
 }}
 
+function isSkipped(section) {{
+    const skipBox = section.querySelector('input.skip-feature');
+    return skipBox !== null && skipBox.checked;
+}}
+
 function visibleUnselectedFeatures() {{
     return Array.from(document.querySelectorAll('section.feature')).filter(section =>
         section.style.display !== 'none' &&
+        !isSkipped(section) &&
         !section.querySelector('input[type="radio"]:checked')
     );
 }}
@@ -571,6 +592,7 @@ function updateNextUnselectedButton() {{
     const button = document.getElementById('next-unselected');
     const visibleUnselected = visibleUnselectedFeatures();
     const hasAnyUnselected = Array.from(document.querySelectorAll('section.feature')).some(section =>
+        !isSkipped(section) &&
         !section.querySelector('input[type="radio"]:checked')
     );
     button.disabled = visibleUnselected.length === 0;
@@ -582,7 +604,7 @@ function updateNextUnselectedButton() {{
 }}
 
 function updateSelectedCount() {{
-    const sections = Array.from(document.querySelectorAll('section.feature'));
+    const sections = Array.from(document.querySelectorAll('section.feature')).filter(section => !isSkipped(section));
     const selected = sections.filter(section =>
         section.querySelector('input[type="radio"]:checked')
     ).length;
@@ -638,6 +660,11 @@ document.getElementById('next-unselected').addEventListener('click', () => {{
 document.querySelectorAll('.filter-type, .filter-vtype, .filter-status').forEach(el => el.addEventListener('change', applyFilters));
 document.getElementById('filter-iv').addEventListener('input', applyFilters);
 document.getElementById('filter-names').addEventListener('input', applyFilters);
+document.getElementById('filter-important').addEventListener('change', applyFilters);
+document.querySelectorAll('input.skip-feature').forEach(cb => cb.addEventListener('change', () => {{
+    applyFilters();
+    updateSelectedCount();
+}}));
 applyFilters();
 updateSelectedCount();
 

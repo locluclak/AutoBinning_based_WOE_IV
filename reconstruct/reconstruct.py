@@ -4,11 +4,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from core.woe_stats import (add_score_column, chi2_contingency_test, chi2_cramers,
-                            chi2_cramers_categorical, cramer_v_color, cramer_v_type,
-                            create_missing_woe_df, create_woe_df, create_woe_df_categorical,
-                            figure_to_base64, format_p_value, get_bin_stats,
-                            get_bin_stats_categorical, is_categorical, special_mask)
+from core.woe_stats import (add_score_column, chi2_cramers, chi2_cramers_categorical,
+                            cramer_v_color, cramer_v_type, create_woe_df,
+                            create_woe_df_categorical, figure_to_base64, format_p_value,
+                            get_bin_stats, get_bin_stats_categorical, is_categorical, special_mask)
 
 DEFAULT_FORMATS = {
     "prob_n_obs": "{:.2%}",
@@ -23,7 +22,7 @@ DEFAULT_FORMATS = {
 
 PAGE_CSS = """
 body { font-family: Arial, sans-serif; margin: 24px; color: #222; }
-h1.title { text-align: center; font-size: 40px; color: #111; margin: 16px 0 4px; }
+h1.title { text-align: center; font-size: 24px; color: #111; margin: 8px 0; }
 h2 { margin-top: 0; }
 .feature h2, .feature-card h2 { font-size: 28px; }
 h3 { margin-top: 24px; }
@@ -70,6 +69,12 @@ th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
 .compare-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-bottom: 3px solid #999; padding: 8px 0 24px; }
 .compare-cell { min-width: 0; vertical-align: top; }
 .compare-empty { color: #999; font-style: italic; border: 1px dashed #ccc; padding: 24px; text-align: center; background: #f8f9fa; }
+.search-bar { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.search-bar .filter-group { display: flex; align-items: center; gap: 8px; }
+.search-bar .filter-label { font-weight: bold; color: #333; }
+.search-bar input[type="text"] { width: 300px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
+.filter-counts { margin-left: auto; color: #555; white-space: nowrap; }
+.report-header { position: sticky; top: 0; background: #fff; padding: 8px 16px; border-bottom: 2px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; display: flex; flex-direction: column; gap: 6px; }
 """
 
 
@@ -77,52 +82,6 @@ def woe_table_html(woe_df, v_c):
     display_df = add_score_column(woe_df, v_c).drop(columns=["IV_total"], errors="ignore")
     valid_formats = {k: v for k, v in DEFAULT_FORMATS.items() if k in display_df.columns}
     return display_df.style.format(valid_formats).to_html()
-
-
-def build_missing_table_html(x, y):
-    labels = pd.Series(["Missing" if pd.isna(v) else "Non-Missing" for v in x],
-                       index=x.index, dtype=object)
-    p_value, v_c = chi2_contingency_test(labels, pd.Series(y, index=x.index))
-    missing_woe_df = add_score_column(create_missing_woe_df(x, y), v_c)
-    iv_total = missing_woe_df["IV_total"].iloc[0] if "IV_total" in missing_woe_df.columns else None
-    display_df = missing_woe_df.drop(columns=["IV_total"], errors="ignore")
-    valid_formats = {k: v for k, v in DEFAULT_FORMATS.items() if k in display_df.columns}
-    table_html = display_df.style.format(valid_formats).to_html()
-
-    meta_parts = []
-    if iv_total is not None:
-        iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
-        meta_parts.append(
-            f'<span class="iv-total">'
-            f'<span class="iv-label">IV total:</span> '
-            f'<b class="iv-value" style="color:{iv_color}">{iv_total:.2f}</b>'
-            f'</span>'
-        )
-    p_color = "#16a34a" if p_value <= 0.05 else "#dc2626"
-    meta_parts.append(
-        f'<span class="p-value" style="color:{p_color}">'
-        f'<span class="stat-label">p-value:</span> '
-        f'<b>{format_p_value(p_value)}</b>'
-        f'</span>'
-    )
-    title = " ".join(meta_parts)
-
-    v_color = cramer_v_color(v_c)
-    stats_html = (
-        f'<div style="margin-bottom: 2px; color:{v_color}; font-size: 0.9em;">'
-        f'<span class="stat-label">Cramer&apos;s V:</span> <b>{v_c:.4f}</b>'
-        f' &nbsp;-&nbsp; '
-        f'<span class="stat-label">Type:</span> <b>{cramer_v_type(v_c)}</b>'
-        f'</div>'
-    )
-
-    return f"""
-    <div class="woe-block">
-        <div style="margin-bottom: 6px;">{title}</div>
-        {stats_html}
-        {table_html}
-    </div>
-    """
 
 
 def plot_feature(feature, x, y_clean, splits, special=None, missing_first=False, categorical=False):
@@ -198,7 +157,6 @@ def build_feature_card(feature, cfg, x_full, y, special):
     iv_total = float(woe_df['IV_total'].iloc[0])
     plot_b64 = plot_feature(feature, x, y_clean, splits, special=feature_special if not categorical else None,
                             missing_first=consider_special, categorical=categorical)
-    missing_html = build_missing_table_html(x_full, y)
     woe_table = woe_table_html(woe_df, v_c)
 
     iv_color = "#16a34a" if iv_total >= 0.2 else "#dc2626"
@@ -240,10 +198,6 @@ def build_feature_card(feature, cfg, x_full, y, special):
         </div></div>
         <h3>WOE Tables</h3>
         <div class="woe-table-container">
-            <div class="woe-row">
-                <div class="woe-row-label">Missing vs Non-Missing</div>
-                <div class="woe-row-columns">{missing_html}</div>
-            </div>
             <div class="woe-row">
                 <div class="woe-row-label">{escape(part)}</div>
                 <div class="woe-row-columns"><div class="woe-block">{woe_table}</div></div>
@@ -400,18 +354,68 @@ def build_report(df, versions, label_name, min_bin_size=0.05):
 <style>{PAGE_CSS}</style>
 </head>
 <body>
-<h1 class="title">{escape(str(label_name))}</h1>
+<div class="report-header">
+    <h1 class="title">{escape(str(label_name))}</h1>
+    {build_search_bar(version_data)}
+</div>
 <p>Reconstructed from exported splits. No OptimalBinning used.</p>
 {body}
+<script>
+function getSearchNames(input) {{
+    return input.value.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+}}
+
+function applySearch() {{
+    const inputs = Array.from(document.querySelectorAll('.search-input'));
+    const targets = document.querySelectorAll('.feature, .compare-row');
+    let shown = 0;
+    targets.forEach(t => {{
+        const feature = (t.dataset.feature || '').toLowerCase();
+        let ok = inputs.length === 0;
+        if (inputs.length > 0) {{
+            ok = inputs.some(input => {{
+                const names = getSearchNames(input);
+                return names.length === 0 || names.includes(feature);
+            }});
+        }}
+        t.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+    }});
+    document.getElementById('filter-count').textContent = `Showing ${{shown}} / ${{targets.length}}`;
+}}
+
+document.querySelectorAll('.search-input').forEach(input =>
+    input.addEventListener('input', applySearch));
+applySearch();
+</script>
 </body>
 </html>
 """
 
 
+def build_search_bar(version_data):
+    """Single search bar for both single and comparison reports."""
+    return """
+    <div class="search-bar">
+        <span class="filter-group">
+            <span class="filter-label">Search features:</span>
+            <input type="text" class="search-input" id="search-0"
+                placeholder="feature_name1, feature_name2, ...">
+        </span>
+        <span class="filter-counts" aria-live="polite">
+            <span id="filter-count">Showing all</span>
+        </span>
+    </div>
+    """
+
+
 def build_single_body(version):
     sections = []
-    for card in version["results"].values():
-        sections.append(f"<section class=\"feature\">{card}<hr class=\"feature-separator\"></section>")
+    for feature, card in version["results"].items():
+        sections.append(
+            f'<section class="feature" data-feature="{escape(str(feature))}">'
+            f'{card}<hr class="feature-separator"></section>'
+        )
     return f"""
 {build_summary_html(version["meta"])}
 {''.join(sections)}
@@ -433,7 +437,7 @@ def build_compare_body(version_data):
         left_cell = left["results"].get(feature)
         right_cell = right["results"].get(feature)
         rows.append(f"""
-        <div class="compare-row">
+        <div class="compare-row" data-feature="{escape(str(feature))}">
             <div class="compare-cell">{left_cell if left_cell is not None else empty_cell("Not present in this version")}</div>
             <div class="compare-cell">{right_cell if right_cell is not None else empty_cell("Not present in this version")}</div>
         </div>

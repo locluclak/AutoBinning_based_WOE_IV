@@ -1,7 +1,10 @@
 EXPORT_SCRIPT = """function exportConfig() {
     const selectedConfig = {};
-    const radios = document.querySelectorAll('input[type="radio"]:checked');
-    radios.forEach(radio => {
+    document.querySelectorAll('section.feature').forEach(section => {
+        const skipBox = section.querySelector('input.skip-feature');
+        if (skipBox && skipBox.checked) return;
+        const radio = section.querySelector('input[type="radio"]:checked');
+        if (!radio) return;
         const featureName = radio.name;
         const selectedOption = radio.getAttribute('data-option');
         const part = radio.getAttribute('data-part');
@@ -54,6 +57,11 @@ EXPORT_SCRIPT = """function exportConfig() {
 function exportSelectedHTML() {
     const clone = document.documentElement.cloneNode(true);
     clone.querySelectorAll('section.feature').forEach(section => {
+        const skipBox = section.querySelector('input.skip-feature');
+        if (skipBox && skipBox.checked) {
+            section.remove();
+            return;
+        }
         const radio = section.querySelector('input[type="radio"]:checked');
         if (!radio) {
             section.remove();
