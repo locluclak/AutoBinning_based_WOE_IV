@@ -27,6 +27,9 @@ MISSING_FORMATS = {
 }
 
 PRECISION_OPTIONS = [
+    ("0.000001", "1e-6"),
+    ("0.00001", "1e-5"),
+    ("0.0001", "1e-4"),
     ("0.001", "0.001"),
     ("0.01", "0.01"),
     ("0.1", "0.1"),
@@ -859,7 +862,13 @@ document.querySelectorAll('.merge-remove').forEach(btn => {{
 document.querySelectorAll('.merge-reset').forEach(btn => {{
     btn.addEventListener('click', function () {{
         const splitsDiv = this.closest('.option-splits');
+        splitsDiv.removeAttribute('data-rounded-splits');
+        splitsDiv.setAttribute('data-rounded', 'false');
         splitsDiv.setAttribute('data-removed-indices', '[]');
+        const dirSel = splitsDiv.querySelector('.rounding-direction');
+        const precSel = splitsDiv.querySelector('.rounding-precision');
+        if (dirSel) dirSel.value = 'nearest';
+        if (precSel) precSel.value = '1';
         renderSplitsRow(splitsDiv);
     }});
 }});
