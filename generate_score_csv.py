@@ -221,6 +221,7 @@ def main():
     for f in feature_names:
         out[f] = df[f].values
     for f in feature_names:
+        out = out.copy()
         out[f"{f}_bin_score"] = np.round(feature_scores[f], 6)
     out["score"] = np.round(total, 6)
 
