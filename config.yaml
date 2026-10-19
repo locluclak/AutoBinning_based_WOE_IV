@@ -21,11 +21,127 @@
 # ignore_column: ["SNAPSHOT", "CUSTOMER_CDE", "IS_SAVING_NEW_OPEN", "IS_SAVING_100M_NEW_OPEN", "IS_CASA_50M_AVG_AMT_LCL"]
 
 
-input_file: "KHDN_CASA_SAVING_S9(1).csv"
-output_file: "KHDN_CASA_SAVING_S9.html"
-label_name: "IS_CASA_50M_ACTUAL_BAL_LCL"
-min_bin: 4
-max_bin: 10
-special: ['MISSING',]
+# input_file: "KHDN_CASA_SAVING_S9(1).csv"
+# output_file: "KHDN_CASA_SAVING_S9.html"
+# label_name: "IS_CASA_50M_ACTUAL_BAL_LCL"
+# min_bin: 4
+# max_bin: 10
+# special: ['MISSING',]
+# min_diff_woe: 0.01
+# ignore_column: ["CUSTOMER_CDE","SNAPSHOT",RPT_DT,IS_CASA_50M_AVG_AMT_LCL,IS_SAVING_NEW_OPEN,IS_SAVING_100M_NEW_OPEN,IS_CASA_100M_AVG_AMT_LCL,IS_ACTIVE_3M,]
+# important_features: [CASHIN_QTY_D30, CASHIN_QTY_D60, CASHIN_QTY_D90, CASHIN_AMT_D30, CASHIN_AMT_D60, CASHIN_AMT_D90]
+
+
+# input_file: "./oct6/KHDN_CASA_SAVING_S9_VIETDATA_2025.csv"
+# output_file: "./oct6/html/saving_vietdata1b.html"
+# output_json: "./oct6/json/saving_vietdata1b_best.json"
+# label_name: "IS_SAVING_1B_AVG_AMT_LCL"
+# min_bin: 3
+# max_bin: 5
+# special: ['MISSING',"NONE"]
+# min_diff_woe: 0.01
+# ignore_column: [
+#             "CUSTOMER_CDE",
+#             "RPT_DT",
+#             "SNAPSHOT",
+
+#             "IS_CASA_100M_AVG_AMT_LCL",
+#             "IS_CASA_300M_AVG_AMT_LCL",
+#             "IS_CASA_500M_AVG_AMT_LCL",
+#             "IS_CASA_1B_AVG_AMT_LCL",
+
+#             "IS_SAVING_NEW_OPEN",
+#             "IS_SAVING_100M_NEW_OPEN",
+#             "IS_SAVING_300M_AVG_AMT_LCL",
+#             "IS_SAVING_500M_AVG_AMT_LCL",
+#             # "IS_SAVING_1B_AVG_AMT_LCL",
+
+
+#             "IS_SAVING_OPEN_ACCT_YTD",
+#             "IS_SAVING_OPEN_ACCT_LAST_YTD",
+#             "TOI_DP",
+#             "TOI_LN",
+#             "TOI_FEE",
+#             "TOI_FX",
+#             "ACTUAL_BAL_LCL_D0",
+#             "ACTUAL_BAL_LCL_L1M",
+#             "ACTUAL_BAL_LCL_L2M",
+#             "ACTUAL_BAL_LCL_L3M",
+#             "AVG_AMT_LCL_D0",
+#             "AVG_AMT_LCL_L1M",
+#             "AVG_AMT_LCL_L2M",
+#             "AVG_AMT_LCL_L3M",
+#             "TENURE_T24_CUS_OPEN_1Y"
+#         ]
+# important_features: ["TONG_TAI_SAN_CK_2025","TIEN_CK_2025","DTTC_NH_CK_2025","DTTC_DH_CK_2025","VCSH_CK_2025","NOPHAITRA_CK_2025","DOANH_THU_NAM_2024_2025"] 
+
+# Per-feature bin counts, required by woe_best_features.py.
+# Every feature to export must be listed here; unlisted features are skipped
+# (and printed so you can add them).
+# Value: an int N (exactly N bins) or a mapping {min_bin: X, max_bin: Y}.
+feature_bins:
+  C01: 4
+  C02: 4
+  C03: 4
+  C04: 3
+  C05: 3
+  C06: 4
+  C07: 3
+  C08: 4
+  C09: 4
+  C10: 4
+  A01: 3
+  A02: 4
+  A03: 4
+  A04: 4
+  A05: 4
+  A06: 4
+  A07: 4
+  A08: 4
+  A09: 3
+  A10: 4
+  L01: 4
+  L02: 4
+  L03: 4
+  L04: 3
+  L05: 3
+  L06: 4
+  L07: 3
+  L08: 4
+  L09: 4
+  L10: 4
+
+input_file: "dataset_features.csv"
+output_file: "testing.html"
+output_json: "testing.json"
+label_name: "casa"
+min_bin: 3
+max_bin: 5
+special: ['MISSING',"NONE"]
 min_diff_woe: 0.01
-ignore_column: ["CUSTOMER_CDE","SNAPSHOT",RPT_DT,IS_CASA_50M_AVG_AMT_LCL,IS_SAVING_NEW_OPEN,IS_SAVING_100M_NEW_OPEN,IS_CASA_100M_AVG_AMT_LCL,IS_ACTIVE_3M,]
+ignore_column: [
+    # "casa",
+    "loan",
+    "card",
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08",
+    "C09",
+    "C10",
+    "A01",
+    "A02",
+    "A03",
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+        ]
+important_features: [] 

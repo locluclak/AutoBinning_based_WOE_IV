@@ -47,7 +47,7 @@ PRECISION_OPTIONS = [
 ]
 
 
-def compute_feature_results(feature, X_train, y):
+def compute_feature_results(feature, X_train, y, min_n_bins=None, max_n_bins=None):
     """Compute all binning options/parts for a feature.
 
     Shared by the static HTML report and the Streamlit app.
@@ -59,7 +59,8 @@ def compute_feature_results(feature, X_train, y):
             results.update(calculate_categorical_feature(feature, X_train, y, considerSPECIAL=consider))
     else:
         for consider in (False, True):
-            results.update(calculate_feature(feature, X_train, y, considerSPECIAL=consider))
+            results.update(calculate_feature(feature, X_train, y, considerSPECIAL=consider,
+                                             min_n_bins=min_n_bins, max_n_bins=max_n_bins))
     results.update(calculate_special_option(feature, X_train, y))
 
     parts = {}

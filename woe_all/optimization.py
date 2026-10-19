@@ -12,6 +12,9 @@ OPTIONS = {
     "3. U-shape / peak-valley": "auto_peak_valley",
 }
 
+FREE_OPTION_NAME = "1. Free optimization"
+FREE_OPTIONS = {FREE_OPTION_NAME: None}
+
 
 class _InfeasibleModel:
     def __init__(self):
@@ -36,11 +39,12 @@ class _SpecialModel:
         self.binning_table = None
 
 
-def _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend):
+def _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend,
+                min_n_bins=None, max_n_bins=None):
     return OptimalBinning(name=name,
                           dtype="numerical",
-                          min_n_bins=MIN_BIN,
-                          max_n_bins=MAX_BIN,
+                          min_n_bins=MIN_BIN if min_n_bins is None else min_n_bins,
+                          max_n_bins=MAX_BIN if max_n_bins is None else max_n_bins,
                           min_bin_size=min_bin_size,
                           max_bin_size=max_bin_size,
                           min_event_rate_diff=min_event_rate_diff,
@@ -60,13 +64,15 @@ def _model_iv(optb, x, y, considerSPECIAL, special):
 
 
 def _fit_peak_valley(name, x, y, min_bin_size, max_bin_size, min_event_rate_diff,
-                     display_x, display_y, considerSPECIAL, special):
+                     display_x, display_y, considerSPECIAL, special,
+                     min_n_bins=None, max_n_bins=None):
     """U-shape trend: run strict 'peak' and 'valley' and keep the higher IV one.
 
     If both are infeasible, return an infeasible model.
     """
     candidates = [
-        _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend)
+        _build_optb(name, min_bin_size, max_bin_size, min_event_rate_diff, trend,
+                    min_n_bins=min_n_bins, max_n_bins=max_n_bins)
         for trend in ("peak", "valley")
     ]
     for optb in candidates:
@@ -83,7 +89,8 @@ def _fit_peak_valley(name, x, y, min_bin_size, max_bin_size, min_event_rate_diff
     return max(feasible, key=iv_key)
 
 
-def calculate_feature(feature, X_train, y, considerSPECIAL=False):
+def calculate_feature(feature, X_train, y, considerSPECIAL=False, min_n_bins=None, max_n_bins=None,
+                      options=None):
     x_original = X_train[feature].copy()
 
     special_values = list(SPECIAL)
@@ -124,15 +131,17 @@ def calculate_feature(feature, X_train, y, considerSPECIAL=False):
 
     results = {}
 
-    for option_name, trend in OPTIONS.items():
+    for option_name, trend in (options or OPTIONS).items():
         if infeasible:
             optb = _InfeasibleModel()
         elif trend == "auto_peak_valley":
             optb = _fit_peak_valley(feature, x, y_clean, min_bin_size, max_bin_size,
                                     min_event_rate_diff, display_x, display_y,
-                                    considerSPECIAL, feature_special)
+                                    considerSPECIAL, feature_special,
+                                    min_n_bins=min_n_bins, max_n_bins=max_n_bins)
         else:
-            optb = _build_optb(feature, min_bin_size, max_bin_size, min_event_rate_diff, trend)
+            optb = _build_optb(feature, min_bin_size, max_bin_size, min_event_rate_diff,
+                               trend, min_n_bins=min_n_bins, max_n_bins=max_n_bins)
             optb.fit(x, y_clean)
 
         missing_first = considerSPECIAL and optb.status == "OPTIMAL"

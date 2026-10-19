@@ -2,7 +2,7 @@
 
 Usage:
     python export_final_bininfo.py [splits.json] [bin_info.csv] [output.html] [--label NAME]
-
+    python export_final_bininfo.py oct6/html/casa_vietdata100m.json oct6/html/casa_vietdata100m_bininfo.csv oct6/html/E_casa_vietdata100m.html --label 'TIỀN GỬI KHÔNG KỲ HẠN LỚN HƠN 100 TRIỆU'
 The report mirrors the single-JSON (version 1) layout of reconstruct_report.py,
 but it is built entirely from the exported splits JSON and the bin-info CSV
 produced by generate_bins_csv.py, without loading the raw dataset.
